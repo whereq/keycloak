@@ -54,7 +54,6 @@ import org.keycloak.models.UserModel;
 import org.keycloak.models.UserProvider;
 import org.keycloak.models.jpa.entities.GroupAttributeEntity;
 import org.keycloak.models.jpa.entities.GroupEntity;
-import org.keycloak.models.jpa.entities.OrganizationDomainEntity;
 import org.keycloak.models.jpa.entities.OrganizationEntity;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.utils.StringUtil;
@@ -79,7 +78,7 @@ public class JpaOrganizationProvider implements OrganizationProvider {
     }
 
     @Override
-    public OrganizationModel create(String name, Set<String> domains) {
+    public OrganizationModel create(String name) {
         if (StringUtil.isBlank(name)) {
             throw new ModelValidationException("Name can not be null");
         }
@@ -99,8 +98,6 @@ public class JpaOrganizationProvider implements OrganizationProvider {
             adapter.setEnabled(true);
 
             em.persist(adapter.getEntity());
-
-            adapter.setDomains(domains.stream().map(OrganizationDomainModel::new).collect(Collectors.toSet()));
         } finally {
             session.removeAttribute(OrganizationModel.class.getName());
         }
@@ -190,11 +187,12 @@ public class JpaOrganizationProvider implements OrganizationProvider {
 
     @Override
     public OrganizationModel getByDomainName(String domain) {
-        TypedQuery<OrganizationDomainEntity> query = em.createNamedQuery("getByName", OrganizationDomainEntity.class);
+        TypedQuery<OrganizationEntity> query = em.createNamedQuery("getByDomainName", OrganizationEntity.class);
+        query.setParameter("realmId", this.realm.getId());
         query.setParameter("name", domain.toLowerCase());
         try {
-            OrganizationDomainEntity entity = query.getSingleResult();
-            return new OrganizationAdapter(realm, entity.getOrganization(), this);
+            OrganizationEntity entity = query.getSingleResult();
+            return new OrganizationAdapter(realm, entity, this);
         } catch (NoResultException nre) {
             return null;
         }
