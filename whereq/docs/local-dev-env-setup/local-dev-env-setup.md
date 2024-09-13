@@ -112,6 +112,8 @@ By specifying `external: true` for the "database" network:
 This setup is common in multi-container applications where services (like databases) need to be accessible by other containers within the same network.
 
 
+### Local IDE(Intellij) Remote JVM Debug Setup
+
 | ![Remote JVM Debug](./remote_jvm_debug.png) |
 |---------------------------------------------| 
 | Remote JVM Debug |
