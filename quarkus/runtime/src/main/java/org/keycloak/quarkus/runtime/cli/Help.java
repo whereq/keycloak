@@ -43,7 +43,7 @@ public final class Help extends CommandLine.Help {
     private static final int HELP_WIDTH = 100;
     private static final String DEFAULT_OPTION_LIST_HEADING = "Options:";
     private static final String DEFAULT_COMMAND_LIST_HEADING = "Commands:";
-    private boolean allOptions;
+    private static boolean ALL_OPTIONS;
 
     Help(CommandLine.Model.CommandSpec commandSpec, ColorScheme colorScheme) {
         super(commandSpec, colorScheme);
@@ -157,48 +157,35 @@ public final class Help extends CommandLine.Help {
     }
 
     private boolean isVisible(OptionSpec option) {
-        if (option.description().length == 0) {
-            // do not show options without a description
+        if (option.description().length == 0 || option.hidden()) {
+            // do not show options without a description nor hidden
             return false;
+        }
+        
+        if (ALL_OPTIONS) {
+            return true;
         }
 
         String optionName = undecorateDuplicitOptionName(option.longestName());
 
         OptionCategory category = null;
-        if (option.group() != null) {
+        if (option.group() != null && option.group().heading() != null) {
             category = OptionCategory.fromHeading(removeSuffix(option.group().heading(), ":"));
         }
         PropertyMapper<?> mapper = getMapper(optionName, category);
 
         if (mapper == null) {
             final var disabledMapper = PropertyMappers.getDisabledMapper(optionName);
-            final var isDisabledMapper = disabledMapper.isPresent();
-
+            
             // Show disabled mappers, which do not have a description when they're enabled
-            final var isEnabledWhenEmpty = isDisabledMapper && disabledMapper.get().getEnabledWhen().isEmpty();
-            if (isEnabledWhenEmpty) {
-                return true;
-            }
-
-            if (allOptions && isDisabledMapper) {
-                return true;
-            }
-
-            // only filter mapped options, defaults to the hidden marker
-            return !option.hidden() && !isDisabledMapper;
+            return disabledMapper.flatMap(PropertyMapper::getEnabledWhen).isEmpty();
         }
 
-        boolean isUnsupportedOption = !PropertyMappers.isSupported(mapper);
-
-        if (isUnsupportedOption) {
-            // unsupported options removed from help if all options are not requested
-            return !option.hidden() && allOptions;
-        }
-
-        return !option.hidden();
+        // unsupported options removed from help if all options are not requested
+        return PropertyMappers.isSupported(mapper);
     }
 
-    public void setAllOptions(boolean allOptions) {
-        this.allOptions = allOptions;
+    public static void setAllOptions(boolean allOptions) {
+        ALL_OPTIONS = allOptions;
     }
 }

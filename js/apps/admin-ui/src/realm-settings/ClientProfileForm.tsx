@@ -4,6 +4,8 @@ import {
   HelpItem,
   TextAreaControl,
   TextControl,
+  useAlerts,
+  useFetch,
 } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
@@ -30,13 +32,11 @@ import { FormProvider, useFieldArray, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { FormAccess } from "../components/form/FormAccess";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import { toAddExecutor } from "./routes/AddExecutor";
 import { toClientPolicies } from "./routes/ClientPolicies";
@@ -172,7 +172,7 @@ export default function ClientProfileForm() {
           addAlert(t("deleteExecutorSuccess"), AlertVariant.success);
           navigate(toClientProfile({ realm, profileName }));
         } catch (error) {
-          addError(t("deleteExecutorError"), error);
+          addError("deleteExecutorError", error);
         }
       } else {
         try {
@@ -180,7 +180,7 @@ export default function ClientProfileForm() {
           addAlert(t("deleteClientSuccess"), AlertVariant.success);
           navigate(toClientPolicies({ realm, tab: "profiles" }));
         } catch (error) {
-          addError(t("deleteClientError"), error);
+          addError("deleteClientError", error);
         }
       }
     },

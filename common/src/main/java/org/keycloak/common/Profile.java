@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BooleanSupplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -58,7 +59,9 @@ public class Profile {
 
         ADMIN2("New Admin Console", Type.DEFAULT, Feature.ADMIN_API),
 
-        LOGIN2("New Login Theme", Type.EXPERIMENTAL),
+        LOGIN2("New Login Theme", Type.DEFAULT),
+
+        LOGIN1("Legacy Login Theme", Type.DEPRECATED),
 
         DOCKER("Docker Registry protocol", Type.DISABLED_BY_DEFAULT),
 
@@ -83,7 +86,7 @@ public class Profile {
         STEP_UP_AUTHENTICATION("Step-up Authentication", Type.DEFAULT),
 
         // Check if kerberos is available in underlying JVM and auto-detect if feature should be enabled or disabled by default based on that
-        KERBEROS("Kerberos", KerberosJdkProvider.getProvider().isKerberosAvailable() ? Type.DEFAULT : Type.DISABLED_BY_DEFAULT),
+        KERBEROS("Kerberos", Type.DEFAULT, 1, () -> KerberosJdkProvider.getProvider().isKerberosAvailable()),
 
         RECOVERY_CODES("Recovery codes", Type.PREVIEW),
 
@@ -101,41 +104,52 @@ public class Profile {
 
         MULTI_SITE("Multi-site support", Type.DISABLED_BY_DEFAULT),
 
+        REMOTE_CACHE("Remote caches support. Requires Multi-site support to be enabled as well.", Type.EXPERIMENTAL),
+
         CLIENT_TYPES("Client Types", Type.EXPERIMENTAL),
 
-        HOSTNAME_V1("Hostname Options V1", Type.DEPRECATED, 1),
         HOSTNAME_V2("Hostname Options V2", Type.DEFAULT, 2),
 
-        PERSISTENT_USER_SESSIONS("Persistent online user sessions across restarts and upgrades", Type.PREVIEW),
+        PERSISTENT_USER_SESSIONS("Persistent online user sessions across restarts and upgrades", Type.DEFAULT),
 
         OID4VC_VCI("Support for the OID4VCI protocol as part of OID4VC.", Type.EXPERIMENTAL),
 
+        OPENTELEMETRY("OpenTelemetry Tracing", Type.PREVIEW),
+
         DECLARATIVE_UI("declarative ui spi", Type.EXPERIMENTAL),
 
-        ORGANIZATION("Organization support within realms", Type.EXPERIMENTAL),
+        ORGANIZATION("Organization support within realms", Type.PREVIEW),
 
-        PASSKEYS("Passkeys", Type.PREVIEW)
+        PASSKEYS("Passkeys", Type.PREVIEW),
+
+        CACHE_EMBEDDED_REMOTE_STORE("Support for remote-store in embedded Infinispan caches", Type.EXPERIMENTAL),
         ;
 
         private final Type type;
         private final String label;
         private final String unversionedKey;
         private final String key;
+        private final BooleanSupplier isAvailable;
 
         private Set<Feature> dependencies;
         private int version;
 
         Feature(String label, Type type, Feature... dependencies) {
-            this(label, type, 1, dependencies);
+            this(label, type, 1, null, dependencies);
+        }
+
+        Feature(String label, Type type, int version, Feature... dependencies) {
+            this(label, type, version, null, dependencies);
         }
 
         /**
          * allowNameKey should be false for new versioned features to disallow using a legacy name, like account2
          */
-        Feature(String label, Type type, int version, Feature... dependencies) {
+        Feature(String label, Type type, int version, BooleanSupplier isAvailable, Feature... dependencies) {
             this.label = label;
             this.type = type;
             this.version = version;
+            this.isAvailable = isAvailable;
             this.key = name().toLowerCase().replaceAll("_", "-");
             if (this.name().endsWith("_V" + version)) {
                 unversionedKey = key.substring(0, key.length() - (String.valueOf(version).length() + 2));
@@ -189,6 +203,10 @@ public class Profile {
             return version;
         }
 
+        public boolean isAvailable() {
+            return isAvailable == null || isAvailable.getAsBoolean();
+        }
+
         public enum Type {
             // in priority order
             DEFAULT("Default"),
@@ -237,6 +255,9 @@ public class Profile {
             Feature enabledFeature = null;
             if (unversionedConfig == FeatureConfig.ENABLED) {
                 enabledFeature = entry.getValue().iterator().next();
+                if (!enabledFeature.isAvailable()) {
+                    throw new ProfileException(String.format("Feature %s cannot be enabled as it is not available.", unversionedFeature));
+                }
             } else if (unversionedConfig == FeatureConfig.DISABLED && ESSENTIAL_FEATURES.contains(unversionedFeature)) {
                 throw new ProfileException(String.format("Feature %s cannot be disabled.", unversionedFeature));
             }
@@ -258,13 +279,17 @@ public class Profile {
                                         enabledFeature.getVersionedKey(), f.getVersionedKey()));
                     }
                     // even if something else was enabled by default, explicitly enabling a lower priority feature takes precedence
+                    if (!f.isAvailable()) {
+                        throw new ProfileException(String.format("Feature %s cannot be enabled as it is not available.", f.getVersionedKey()));
+                    }
                     enabledFeature = f;
                     isExplicitlyEnabledFeature = true;
                     break;
                 case DISABLED:
                     throw new ProfileException("Feature " + f.getVersionedKey() + " should not be disabled using a versioned key.");
                 default:
-                    if (unversionedConfig == FeatureConfig.UNCONFIGURED && enabledFeature == null && isEnabledByDefault(profile, f)) {
+                    if (unversionedConfig == FeatureConfig.UNCONFIGURED && enabledFeature == null
+                            && isEnabledByDefault(profile, f) && f.isAvailable()) {
                         enabledFeature = f;
                     }
                     break;

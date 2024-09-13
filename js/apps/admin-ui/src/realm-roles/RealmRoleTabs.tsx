@@ -1,4 +1,5 @@
 import type RoleRepresentation from "@keycloak/keycloak-admin-client/lib/defs/roleRepresentation";
+import { useAlerts, useFetch } from "@keycloak/keycloak-ui-shared";
 import {
   AlertVariant,
   ButtonVariant,
@@ -15,7 +16,7 @@ import {
   useWatch,
 } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useLocation, useMatch, useNavigate } from "react-router-dom";
+import { useMatch, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
 import { toClient } from "../clients/routes/Client";
 import {
@@ -24,7 +25,6 @@ import {
   ClientRoleTab,
   toClientRole,
 } from "../clients/routes/ClientRole";
-import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import {
   AttributeForm,
@@ -35,7 +35,7 @@ import {
   arrayToKeyValue,
   keyValueToArray,
 } from "../components/key-value-form/key-value-convert";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { PermissionsTab } from "../components/permission-tab/PermissionTab";
 import { RoleForm } from "../components/role-form/RoleForm";
 import { AddRoleMappingModal } from "../components/role-mapping/AddRoleMappingModal";
@@ -45,8 +45,8 @@ import {
   useRoutableTab,
 } from "../components/routable-tabs/RoutableTabs";
 import { ViewHeader } from "../components/view-header/ViewHeader";
+import { useAccess } from "../context/access/Access";
 import { useRealm } from "../context/realm-context/RealmContext";
-import { useFetch } from "../utils/useFetch";
 import useIsFeatureEnabled, { Feature } from "../utils/useIsFeatureEnabled";
 import { useParams } from "../utils/useParams";
 import { UsersInRoleTab } from "./UsersInRoleTab";
@@ -65,16 +65,21 @@ export default function RealmRoleTabs() {
   const navigate = useNavigate();
 
   const { id, clientId } = useParams<ClientRoleParams>();
-  const { pathname } = useLocation();
-
   const { realm: realmName, realmRepresentation: realm } = useRealm();
-
   const [key, setKey] = useState(0);
   const [attributes, setAttributes] = useState<KeyValueType[] | undefined>();
 
   const refresh = () => setKey(key + 1);
 
   const { addAlert, addError } = useAlerts();
+
+  const { hasAccess } = useAccess();
+  const canViewPermissionsTab = hasAccess(
+    "query-clients",
+    "manage-authorization",
+  );
+
+  const [canManageClientRole, setCanManageClientRole] = useState(false);
 
   const [open, setOpen] = useState(false);
   const convert = (role: RoleRepresentation) => {
@@ -110,6 +115,14 @@ export default function RealmRoleTabs() {
       setAttributes(convertedRole.attributes);
     },
     [key],
+  );
+
+  useFetch(
+    async () => adminClient.clients.findOne({ id: clientId }),
+    (client) => {
+      if (clientId) setCanManageClientRole(client?.access?.manage as boolean);
+    },
+    [],
   );
 
   const onSubmit: SubmitHandler<AttributeForm> = async (formValues) => {
@@ -210,76 +223,6 @@ export default function RealmRoleTabs() {
     },
   });
 
-  const dropdownItems = pathname.includes("associated-roles")
-    ? [
-        <DropdownItem
-          key="delete-all-associated"
-          component="button"
-          onClick={() => toggleDeleteAllAssociatedRolesDialog()}
-        >
-          {t("removeAllAssociatedRoles")}
-        </DropdownItem>,
-        <DropdownItem
-          key="delete-role"
-          component="button"
-          onClick={() => {
-            toggleDeleteDialog();
-          }}
-        >
-          {t("deleteRole")}
-        </DropdownItem>,
-      ]
-    : [
-        <DropdownItem
-          key="toggle-modal"
-          data-testid="add-roles"
-          component="button"
-          onClick={() => toggleModal()}
-        >
-          {t("addAssociatedRolesText")}
-        </DropdownItem>,
-        <DropdownItem
-          key="delete-role"
-          component="button"
-          onClick={() => toggleDeleteDialog()}
-        >
-          {t("deleteRole")}
-        </DropdownItem>,
-      ];
-
-  const [
-    toggleDeleteAllAssociatedRolesDialog,
-    DeleteAllAssociatedRolesConfirm,
-  ] = useConfirmDialog({
-    titleKey: t("removeAllAssociatedRoles") + "?",
-    messageKey: t("removeAllAssociatedRolesConfirmDialog", {
-      name: roleName || t("createRole"),
-    }),
-    continueButtonLabel: "delete",
-    continueButtonVariant: ButtonVariant.danger,
-    onConfirm: async () => {
-      try {
-        const additionalRoles = await adminClient.roles.getCompositeRoles({
-          id,
-        });
-        await adminClient.roles.delCompositeRoles({ id }, additionalRoles);
-        addAlert(
-          t("compositeRoleOff"),
-          AlertVariant.success,
-          t("compositesRemovedAlertDescription"),
-        );
-        navigate(toTab("details"));
-        refresh();
-      } catch (error) {
-        addError("roleDeleteError", error);
-      }
-    },
-  });
-
-  const toggleModal = () => {
-    setOpen(!open);
-  };
-
   const addComposites = async (composites: RoleRepresentation[]) => {
     try {
       await adminClient.roles.createComposite(
@@ -304,7 +247,6 @@ export default function RealmRoleTabs() {
   return (
     <>
       <DeleteConfirm />
-      <DeleteAllAssociatedRolesConfirm />
       {open && (
         <AddRoleMappingModal
           id={id}
@@ -324,7 +266,17 @@ export default function RealmRoleTabs() {
           },
         ]}
         actionsDropdownId="roles-actions-dropdown"
-        dropdownItems={dropdownItems}
+        dropdownItems={[
+          <DropdownItem
+            key="delete-role"
+            component="button"
+            onClick={() => {
+              toggleDeleteDialog();
+            }}
+          >
+            {t("deleteRole")}
+          </DropdownItem>,
+        ]}
         divider={false}
       />
       <PageSection variant="light" className="pf-v5-u-p-0">
@@ -346,21 +298,19 @@ export default function RealmRoleTabs() {
                 editMode
               />
             </Tab>
-            {composites && (
-              <Tab
-                data-testid="associatedRolesTab"
-                title={<TabTitleText>{t("associatedRolesText")}</TabTitleText>}
-                {...associatedRolesTab}
-              >
-                <RoleMapping
-                  name={roleName!}
-                  id={id}
-                  type="roles"
-                  isManager
-                  save={(rows) => addComposites(rows.map((r) => r.role))}
-                />
-              </Tab>
-            )}
+            <Tab
+              data-testid="associatedRolesTab"
+              title={<TabTitleText>{t("associatedRolesText")}</TabTitleText>}
+              {...associatedRolesTab}
+            >
+              <RoleMapping
+                name={roleName!}
+                id={id}
+                type="roles"
+                isManager
+                save={(rows) => addComposites(rows.map((r) => r.role))}
+              />
+            </Tab>
             {!isDefaultRole(roleName) && (
               <Tab
                 data-testid="attributesTab"
@@ -371,6 +321,7 @@ export default function RealmRoleTabs() {
                 <AttributesForm
                   form={form}
                   save={onSubmit}
+                  fineGrainedAccess={canManageClientRole}
                   reset={() =>
                     setValue("attributes", attributes, { shouldDirty: false })
                   }
@@ -385,14 +336,15 @@ export default function RealmRoleTabs() {
                 <UsersInRoleTab data-cy="users-in-role-tab" />
               </Tab>
             )}
-            {isFeatureEnabled(Feature.AdminFineGrainedAuthz) && (
-              <Tab
-                title={<TabTitleText>{t("permissions")}</TabTitleText>}
-                {...permissionsTab}
-              >
-                <PermissionsTab id={id} type="roles" />
-              </Tab>
-            )}
+            {isFeatureEnabled(Feature.AdminFineGrainedAuthz) &&
+              canViewPermissionsTab && (
+                <Tab
+                  title={<TabTitleText>{t("permissions")}</TabTitleText>}
+                  {...permissionsTab}
+                >
+                  <PermissionsTab id={id} type="roles" />
+                </Tab>
+              )}
           </RoutableTabs>
         </FormProvider>
       </PageSection>

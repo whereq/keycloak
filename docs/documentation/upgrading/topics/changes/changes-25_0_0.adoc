@@ -80,10 +80,16 @@ In order to dynamically resolve it from request headers, you need to set the `ho
 
 For more details and more comprehensive scenarios, see https://www.keycloak.org/server/hostname[Configuring the hostname (v2)].
 
+== `security-admin-console` Client Redirect URIs
+
+The handling of the `${authAdminUrl}` has changed in hostname v1. Previously with hostname v1 the admin URL was resolved dynamically from the request if the `hostname-admin` or `hostname-admin-url` options were not set. With hostname v2 the admin URL will default instead to the frontend URL. 
+If the `hostname` option is set and `hostname-strict` is true, this change will prevent redirect URIs with alternative hostnames from working for Clients using the Root URL `${authAdminUrl}`. 
+You should consider using the `hostname-admin` option instead of the redirect URIs to allow a single alternative hostname. Alternative hostname redirects should be removed as the `security-admin-console` Client only needs the default redirect URI of `/admin/master/console/*` with Root URL of `${authAdminUrl}`.
+
 = Persistent user sessions
 
 Previous versions of {project_name} stored only offline user and offline client sessions in the databases.
-The new feature `persistent-user-session` stores online user sessions and online client sessions not only in memory, but also in the database.
+The new feature `persistent-user-sessions` stores online user sessions and online client sessions not only in memory, but also in the database.
 This will allow a user to stay logged in even if all instances of {project_name} are restarted or upgraded.
 
 == Enabling persistent user sessions
@@ -91,7 +97,7 @@ This will allow a user to stay logged in even if all instances of {project_name}
 The feature is a preview feature and disabled by default. To use it, add the following to your build command:
 
 ----
-bin/kc.sh build --features=persistent-user-session ...
+bin/kc.sh build --features=persistent-user-sessions ...
 ----
 
 For more details see the https://www.keycloak.org/server/features[Enabling and disabling features] {section}.
@@ -142,7 +148,7 @@ The first starting node will:
 . Migrate the database to the schema version 25.
 . Copy all session information from either the remote {jdgserver_name} or the JDBC persistence configured for {project_name}'s embedded cache to the database of {project_name}.
 +
-The data will be stored in the tables `offline_user_session` and `online_user_session` with `offline_flag` set to `false`.
+The data will be stored in the tables `offline_user_session` and `offline_client_session` with `offline_flag` set to `false`.
 
 . Clear the caches.
 +
@@ -162,7 +168,7 @@ TIP: If the remote {jdgserver_name} is used in a multi-site setup, you can reduc
 == Signing out existing users
 
 In previous versions and when the feature is disabled, a restart of all {project_name} nodes logged out all users.
-To sign out all online users sessions of a realm with the `persistent-user-session` feature enabled, use the following steps as before:
+To sign out all online users sessions of a realm with the `persistent-user-sessions` feature enabled, use the following steps as before:
 
 . Log in to the Admin Console.
 . Select the menu entry *Sessions*.
@@ -417,6 +423,10 @@ to avoid overflow after 2038.
 Method `String encode(String rawPassword, int iterations)` on the interface `org.keycloak.credential.hash.PasswordHashProvider` is deprecated. The method will be removed in
 one of the future {project_name} releases. It might be {project_name} 27 release.
 
+= CollectionUtil intesection method removed
+
+The method `org.keycloak.common.util.CollectionUtil.intersection` has been removed. You should use the 'java.util.Collection.retainAll' instead on an existing collection.
+
 = Resteasy util class is deprecated
 
 `org.keycloak.common.util.Resteasy` has been deprecated. You should use the `org.keycloak.util.KeycloakSessionUtil` to obtain the `KeycloakSession` instead.
@@ -438,3 +448,21 @@ An external {jdgserver_name} deployment is supported for multi-site setups as ou
 
 The Oracle Database JDBC driver is no longer part of the Keycloak distribution.
 If you wish to use Oracle DB, you must manually install a version of the Oracle Driver that is compatible with your specific environment. Instructions for this process can be found in the https://www.keycloak.org/server/db[Configuring the database] {section}.
+
+= Deprecated theme variables
+
+The following variables were deprecated in the Admin theme and will be removed in a future version:
+
+* `authServerUrl`. Use `serverBaseUrl` instead.
+* `authUrl`. Use `adminBaseUrl` instead.
+
+The following variables were deprecated in the Account theme and will be removed in a future version:
+
+* `authServerUrl`. Use `serverBaseUrl` instead, note `serverBaseUrl` does not include trailing slash.
+* `authUrl`. Use `serverBaseUrl` instead, note `serverBaseUrl` does not include trailing slash.
+
+= Methods to get and set current refresh token in client session are now deprecated
+
+The methods `String getCurrentRefreshToken()`, `void setCurrentRefreshToken(String currentRefreshToken)`, `int getCurrentRefreshTokenUseCount()`, and `void setCurrentRefreshTokenUseCount(int currentRefreshTokenUseCount)` in the interface `org.keycloak.models.AuthenticatedClientSessionModel` are deprecated. They have been replaced by similar methods that require an identifier as a parameter such as `getRefreshToken(String reuseId)` to manage multiple refresh tokens within a client session.
+The methods will be removed in one of the future {project_name} releases. It might be {project_name} 27 release.
+

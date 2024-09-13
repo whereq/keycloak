@@ -2,6 +2,14 @@ import type ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/de
 import type ComponentTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentTypeRepresentation";
 import { DirectionType } from "@keycloak/keycloak-admin-client/lib/resources/userStorageProvider";
 import {
+  HelpItem,
+  KeycloakSelect,
+  SelectVariant,
+  TextControl,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ActionGroup,
   AlertVariant,
   Button,
@@ -15,27 +23,20 @@ import { useState } from "react";
 import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
-import { HelpItem, TextControl } from "@keycloak/keycloak-ui-shared";
 import { useAdminClient } from "../../../admin-client";
-import { useAlerts } from "../../../components/alert/Alerts";
 import { useConfirmDialog } from "../../../components/confirm-dialog/ConfirmDialog";
 import {
   DynamicComponents,
   convertToName,
 } from "../../../components/dynamic/DynamicComponents";
 import { FormAccess } from "../../../components/form/FormAccess";
-import { KeycloakSpinner } from "../../../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../../../components/view-header/ViewHeader";
 import { useRealm } from "../../../context/realm-context/RealmContext";
 import { convertFormValuesToObject, convertToFormValues } from "../../../util";
-import { useFetch } from "../../../utils/useFetch";
 import { useParams } from "../../../utils/useParams";
 import { toUserFederationLdap } from "../../routes/UserFederationLdap";
 import { UserFederationLdapMapperParams } from "../../routes/UserFederationLdapMapper";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../../components/select/KeycloakSelect";
 
 export default function LdapMapperDetails() {
   const { adminClient } = useAdminClient();
@@ -218,7 +219,7 @@ export default function LdapMapperDetails() {
             <TextControl
               name="name"
               label={t("name")}
-              labelIcon={t("nameHelp")}
+              labelIcon={t("mapperNameHelp")}
               isDisabled={!isNew}
               rules={{ required: t("required") }}
             />

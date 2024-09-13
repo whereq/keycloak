@@ -1,5 +1,9 @@
 import type AdminEventRepresentation from "@keycloak/keycloak-admin-client/lib/defs/adminEventRepresentation";
-import { TextControl } from "@keycloak/keycloak-ui-shared";
+import {
+  KeycloakSelect,
+  SelectVariant,
+  TextControl,
+} from "@keycloak/keycloak-ui-shared";
 import { CodeEditor, Language } from "@patternfly/react-code-editor";
 import {
   ActionGroup,
@@ -31,15 +35,8 @@ import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
 import DropdownPanel from "../components/dropdown-panel/DropdownPanel";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../components/select/KeycloakSelect";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../components/table-toolbar/KeycloakDataTable";
+import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
+import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
 import { prettyPrintJSON } from "../util";
@@ -333,7 +330,9 @@ export const AdminEvents = () => {
                             }
                           >
                             {resourceTypes?.map((option) => (
-                              <SelectOption key={option} value={option} />
+                              <SelectOption key={option} value={option}>
+                                {option}
+                              </SelectOption>
                             ))}
                           </KeycloakSelect>
                         )}
@@ -399,7 +398,9 @@ export const AdminEvents = () => {
                               <SelectOption
                                 key={option.toString()}
                                 value={option}
-                              />
+                              >
+                                {option}
+                              </SelectOption>
                             ))}
                           </KeycloakSelect>
                         )}

@@ -351,7 +351,7 @@ public class LoginPageTest extends AbstractI18NTest {
 
         final String realmLocalizationMessageKey = "loginAccountTitle";
         final String realmLocalizationMessageValue = "Localization Test";
-        
+
         saveLocalizationText(locale, realmLocalizationMessageKey, realmLocalizationMessageValue);
         loginPage.open();
         assertThat(driver.getPageSource(), containsString(realmLocalizationMessageValue));

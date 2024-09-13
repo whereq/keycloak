@@ -18,14 +18,15 @@
 package org.keycloak.protocol.oid4vc.issuance.signing;
 
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.keycloak.common.util.Base64;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.crypto.SignatureProvider;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.protocol.oid4vc.issuance.TimeProvider;
+import org.keycloak.protocol.oid4vc.issuance.VCIssuanceContext;
 import org.keycloak.protocol.oid4vc.issuance.signing.vcdm.Ed255192018Suite;
 import org.keycloak.protocol.oid4vc.issuance.signing.vcdm.LinkedDataCryptographicSuite;
+import org.keycloak.protocol.oid4vc.model.Format;
 import org.keycloak.protocol.oid4vc.model.VerifiableCredential;
 import org.keycloak.protocol.oid4vc.model.vcdm.LdProof;
 
@@ -48,8 +49,8 @@ public class LDSigningService extends SigningService<VerifiableCredential> {
     private final TimeProvider timeProvider;
     private final String keyId;
 
-    public LDSigningService(KeycloakSession keycloakSession, String keyId, String algorithmType, String ldpType, ObjectMapper objectMapper, TimeProvider timeProvider, Optional<String> kid) {
-        super(keycloakSession, keyId, algorithmType);
+    public LDSigningService(KeycloakSession keycloakSession, String keyId, String algorithmType, String ldpType, TimeProvider timeProvider, Optional<String> kid) {
+        super(keycloakSession, keyId, Format.LDP_VC, algorithmType);
         this.timeProvider = timeProvider;
         this.keyId = kid.orElse(keyId);
         KeyWrapper signingKey = getKey(keyId, algorithmType);
@@ -66,14 +67,14 @@ public class LDSigningService extends SigningService<VerifiableCredential> {
 
         linkedDataCryptographicSuite = switch (ldpType) {
             case Ed255192018Suite.PROOF_TYPE ->
-                    new Ed255192018Suite(objectMapper, signatureProvider.signer(signingKey));
+                    new Ed255192018Suite(signatureProvider.signer(signingKey));
             default -> throw new SigningServiceException(String.format("Proof Type %s is not supported.", ldpType));
         };
     }
 
     @Override
-    public VerifiableCredential signCredential(VerifiableCredential verifiableCredential) {
-        return addProof(verifiableCredential);
+    public VerifiableCredential signCredential(VCIssuanceContext vcIssuanceContext) {
+        return addProof(vcIssuanceContext.getVerifiableCredential());
     }
 
     // add the signed proof to the credential.

@@ -86,6 +86,7 @@ export const CellDropdown = ({
         </MenuToggle>
       )}
       isOpen={open}
+      onOpenChange={(isOpen) => setOpen(isOpen)}
       selected={[type]}
       onSelect={(_, value) => {
         onSelect(
@@ -118,7 +119,7 @@ export const changeScope = async (
 
 const castAdminClient = (adminClient: KeycloakAdminClient) =>
   adminClient.clientScopes as unknown as {
-    [index: string]: Function;
+    [index: string]: (params: { id: string }) => Promise<void>;
   };
 
 export const removeScope = async (

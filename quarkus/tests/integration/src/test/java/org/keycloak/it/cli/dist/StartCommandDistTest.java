@@ -53,6 +53,20 @@ public class StartCommandDistTest {
     }
 
     @Test
+    @Launch({ "build", "--spi-events-listener-jboss-logging-success-level=debug" })
+    void warnSpiRuntimeAtBuildtime(LaunchResult result) {
+        assertTrue(result.getOutput().contains("The following run time options were found, but will be ignored during build time: kc.spi-events-listener-jboss-logging-success-level"),
+                () -> "The Output:\n" + result.getOutput() + "doesn't contains the expected string.");
+    }
+
+    @Test
+    @Launch({ "start", "--optimized", "--http-enabled=true", "--hostname-strict=false", "--spi-events-listener-jboss-logging-enabled=false" })
+    void warnSpiBuildtimeAtRuntime(LaunchResult result) {
+        assertTrue(result.getOutput().contains("The following build time options have values that differ from what is persisted - the new values will NOT be used until another build is run: kc.spi-events-listener-jboss-logging-enabled"),
+                () -> "The Output:\n" + result.getOutput() + "doesn't contains the expected string.");
+    }
+
+    @Test
     @Launch({ "--profile=dev", "start" })
     void failUsingDevProfile(LaunchResult result) {
         assertTrue(result.getErrorOutput().contains("ERROR: You can not 'start' the server in development mode. Please re-build the server first, using 'kc.sh build' for the default production mode."),
@@ -121,7 +135,7 @@ public class StartCommandDistTest {
     @Launch({ "start", "--optimized" })
     void testStartUsingOptimizedInvalidEnvOption(LaunchResult result) {
         CLIResult cliResult = (CLIResult) result;
-        cliResult.assertError("Invalid value for option 'KC_LOG': invalid. Expected values are: console, file, syslog, gelf");
+        cliResult.assertError("Invalid value for option 'KC_LOG': invalid. Expected values are: console, file, syslog");
     }
 
     @Test
@@ -160,12 +174,22 @@ public class StartCommandDistTest {
 
     @Test
     @RawDistOnly(reason = "Containers are immutable")
+    void testStartAfterStartDev(KeycloakDistribution dist) {
+        CLIResult cliResult = dist.run("start-dev");
+        cliResult.assertStartedDevMode();
+
+        cliResult = dist.run("start", "--http-enabled", "true", "--hostname-strict", "false");
+        cliResult.assertStarted();
+    }
+
+    @Test
+    @RawDistOnly(reason = "Containers are immutable")
     void testWarningWhenOverridingNonCliBuildOptionsDuringStart(KeycloakDistribution dist) {
         CLIResult cliResult = dist.run("build", "--features=preview");
         cliResult.assertBuild();
         dist.setEnvVar("KC_DB", "postgres");
         cliResult = dist.run("start", "--optimized", "--hostname=localhost", "--http-enabled=true");
-        cliResult.assertMessage("The following build time non-cli options have values that differ from what is persisted - the new values will NOT be used until another build is run: kc.db");
+        cliResult.assertMessage("The following build time options have values that differ from what is persisted - the new values will NOT be used until another build is run: kc.db");
     }
 
     @Test

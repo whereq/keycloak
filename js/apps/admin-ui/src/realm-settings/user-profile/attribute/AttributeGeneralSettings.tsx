@@ -3,7 +3,10 @@ import type { UserProfileConfig } from "@keycloak/keycloak-admin-client/lib/defs
 import {
   FormErrorText,
   HelpItem,
+  KeycloakSelect,
   SelectControl,
+  SelectVariant,
+  useFetch,
 } from "@keycloak/keycloak-ui-shared";
 import {
   Alert,
@@ -29,13 +32,9 @@ import {
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../../admin-client";
 import { FormAccess } from "../../../components/form/FormAccess";
-import { KeycloakSpinner } from "../../../components/keycloak-spinner/KeycloakSpinner";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../../components/select/KeycloakSelect";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
+import { DefaultSwitchControl } from "../../../components/SwitchControl";
 import { useRealm } from "../../../context/realm-context/RealmContext";
-import { useFetch } from "../../../utils/useFetch";
 import { useParams } from "../../../utils/useParams";
 import useToggle from "../../../utils/useToggle";
 import { USERNAME_EMAIL } from "../../NewAttributeSettings";
@@ -273,6 +272,11 @@ export const AttributeGeneralSettings = ({
               )}
             </Grid>
           </FormGroup>
+          <DefaultSwitchControl
+            name="multivalued"
+            label={t("multivalued")}
+            labelIcon={t("multivaluedHelp")}
+          />
           <SelectControl
             name="group"
             label={t("attributeGroup")}

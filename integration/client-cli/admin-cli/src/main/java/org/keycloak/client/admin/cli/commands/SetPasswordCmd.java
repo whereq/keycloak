@@ -16,7 +16,6 @@
  */
 package org.keycloak.client.admin.cli.commands;
 
-import org.keycloak.client.admin.cli.KcAdmMain;
 import org.keycloak.client.cli.config.ConfigData;
 
 import java.io.PrintWriter;
@@ -29,9 +28,9 @@ import static org.keycloak.client.admin.cli.operations.UserOperations.getIdFromU
 import static org.keycloak.client.admin.cli.operations.UserOperations.resetUserPassword;
 import static org.keycloak.client.cli.util.ConfigUtil.credentialsAvailable;
 import static org.keycloak.client.cli.util.ConfigUtil.loadConfig;
-import static org.keycloak.client.cli.util.IoUtil.readSecret;
 import static org.keycloak.client.cli.util.OsUtil.PROMPT;
 import static org.keycloak.client.admin.cli.KcAdmMain.CMD;
+import static org.keycloak.common.util.IoUtils.readPasswordFromConsole;
 
 /**
  * @author <a href="mailto:mstrukel@redhat.com">Marko Strukelj</a>
@@ -45,7 +44,7 @@ public class SetPasswordCmd extends AbstractAuthOptionsCmd {
     @Option(names = "--userid", description = "User ID")
     String userid;
 
-    @Option(names = {"-p", "--new-password"}, description = "New password")
+    @Option(names = {"-p", "--new-password"}, description = "New password", defaultValue = "${env:KC_CLI_PASSWORD}")
     String pass;
 
     @Option(names = {"-t", "--temporary"}, description = "is password temporary")
@@ -62,7 +61,7 @@ public class SetPasswordCmd extends AbstractAuthOptionsCmd {
         }
 
         if (pass == null) {
-            pass = readSecret("Enter password: ");
+            pass = readPasswordFromConsole("password");
         }
 
         ConfigData config = loadConfig();
@@ -99,10 +98,6 @@ public class SetPasswordCmd extends AbstractAuthOptionsCmd {
 
     @Override
     protected String help() {
-        return usage();
-    }
-
-    public static String usage() {
         StringWriter sb = new StringWriter();
         PrintWriter out = new PrintWriter(sb);
         out.println("Usage: " + CMD + " set-password (--username USERNAME | --userid ID) [--new-password PASSWORD] [ARGUMENTS]");
@@ -111,24 +106,10 @@ public class SetPasswordCmd extends AbstractAuthOptionsCmd {
         out.println();
         out.println("Use `" + CMD + " config credentials` to establish an authenticated session, or use CREDENTIALS OPTIONS");
         out.println("to perform one time authentication.");
-        out.println();
-        out.println("Arguments:");
-        out.println();
-        out.println("  Global options:");
-        out.println("    -x                    Print full stack trace when exiting with error");
-        out.println("    --config              Path to the config file (" + KcAdmMain.DEFAULT_CONFIG_FILE_STRING + " by default)");
-        out.println("    --no-config           Don't use config file - no authentication info is loaded or saved");
-        out.println("    --token               Token to use to invoke on Keycloak.  Other credential may be ignored if this flag is set.");
-        out.println("    --truststore PATH     Path to a truststore containing trusted certificates");
-        out.println("    --trustpass PASSWORD  Truststore password (prompted for if not specified and --truststore is used)");
-        out.println("    CREDENTIALS OPTIONS   Same set of options as accepted by '" + CMD + " config credentials' in order to establish");
-        out.println("                          an authenticated sessions. In combination with --no-config option this allows transient");
-        out.println("                          (on-the-fly) authentication to be performed which leaves no tokens in config file.");
-        out.println();
-        out.println("  Command specific options:");
+        globalOptions(out);
         out.println("    --username USERNAME       Identify target user by 'username'");
         out.println("    --userid ID               Identify target user by 'id'");
-        out.println("    -p, --new-password        New password to set. If not specified you will be prompted for it.");
+        out.println("    -p, --new-password        New password to set. If not specified and the env variable KC_CLI_PASSWORD is not defined, you will be prompted for it.");
         out.println("    -t, --temporary           Make the new password temporary - user has to change it on next logon");
         out.println("    -a, --admin-root URL      URL of Admin REST endpoint root if not default - e.g. http://localhost:8080/admin");
         out.println("    -r, --target-realm REALM  Target realm to issue requests against if not the one authenticated against");

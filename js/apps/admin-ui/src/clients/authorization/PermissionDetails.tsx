@@ -3,8 +3,11 @@ import { DecisionStrategy } from "@keycloak/keycloak-admin-client/lib/defs/polic
 import {
   FormErrorText,
   HelpItem,
+  SelectVariant,
   TextAreaControl,
   TextControl,
+  useAlerts,
+  useFetch,
 } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
@@ -22,14 +25,12 @@ import { Controller, FormProvider, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
 import { FormAccess } from "../../components/form/FormAccess";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
 import { useAccess } from "../../context/access/Access";
 import { toUpperCase } from "../../util";
-import { useFetch } from "../../utils/useFetch";
 import { useParams } from "../../utils/useParams";
 import { toAuthorizationTab } from "../routes/AuthenticationTab";
 import type { NewPermissionParams } from "../routes/NewPermission";
@@ -39,7 +40,6 @@ import {
 } from "../routes/PermissionDetails";
 import { ResourcesPolicySelect } from "./ResourcesPolicySelect";
 import { ScopeSelect } from "./ScopeSelect";
-import { SelectVariant } from "../../components/select/KeycloakSelect";
 
 type FormFields = PolicyRepresentation & {
   resourceType: string;

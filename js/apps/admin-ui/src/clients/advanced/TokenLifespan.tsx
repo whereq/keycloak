@@ -51,6 +51,7 @@ export const TokenLifespan = ({
       label={t(id)}
       fieldId={id}
       labelIcon={<HelpItem helpText={t(`${id}Help`)} fieldLabelId={id} />}
+      data-testid={`token-lifespan-${id}`}
     >
       <Controller
         name={name}
@@ -70,6 +71,7 @@ export const TokenLifespan = ({
                   </MenuToggle>
                 )}
                 isOpen={open}
+                onOpenChange={(isOpen) => setOpen(isOpen)}
                 onSelect={(_, value) => {
                   field.onChange(value);
                   setOpen(false);

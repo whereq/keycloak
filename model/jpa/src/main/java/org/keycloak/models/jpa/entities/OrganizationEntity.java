@@ -42,7 +42,10 @@ import jakarta.persistence.Table;
         @NamedQuery(name="getByNameOrDomain", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
                 " where o.realmId = :realmId AND (o.name = :search OR d.name = :search) order by o.name ASC"),
         @NamedQuery(name="getByNameOrDomainContained", query="select distinct o from OrganizationEntity o inner join OrganizationDomainEntity d ON o.id = d.organization.id" +
-                " where o.realmId = :realmId AND (lower(o.name) like concat('%',:search,'%') OR d.name like concat('%',:search,'%')) order by o.name ASC")
+                " where o.realmId = :realmId AND (lower(o.name) like concat('%',:search,'%') OR d.name like concat('%',:search,'%')) order by o.name ASC"),
+        @NamedQuery(name="getCount", query="select count(o) from OrganizationEntity o where o.realmId = :realmId"),
+        @NamedQuery(name="deleteOrganizationsByRealm", query="delete from OrganizationEntity o where o.realmId = :realmId"),
+        @NamedQuery(name="getGroupsByMember", query="select m.groupId from UserGroupMembershipEntity m join GroupEntity g on g.id = m.groupId where g.type = 1 and m.user.id = :userId")
 })
 public class OrganizationEntity {
 
@@ -53,6 +56,9 @@ public class OrganizationEntity {
 
     @Column(name = "NAME")
     private String name;
+
+    @Column(name = "ALIAS")
+    private String alias;
 
     @Column(name = "ENABLED")
     private boolean enabled;
@@ -79,6 +85,14 @@ public class OrganizationEntity {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getAlias() {
+        return alias;
+    }
+
+    public void setAlias(String alias) {
+        this.alias = alias;
     }
 
     public boolean isEnabled() {

@@ -46,6 +46,8 @@ import org.keycloak.operator.controllers.KeycloakServiceDependentResource;
 import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
 import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakStatusCondition;
 import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.BootstrapAdminSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpecBuilder;
 import org.keycloak.operator.testsuite.unit.WatchedResourcesTest;
 import org.keycloak.operator.testsuite.utils.CRAssert;
@@ -61,6 +63,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 
 import jakarta.inject.Inject;
 
@@ -68,8 +71,9 @@ import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.keycloak.operator.controllers.KeycloakDeploymentDependentResource.KC_TRACING_RESOURCE_ATTRIBUTES;
+import static org.keycloak.operator.controllers.KeycloakDeploymentDependentResource.KC_TRACING_SERVICE_NAME;
 import static org.keycloak.operator.testsuite.utils.CRAssert.assertKeycloakStatusCondition;
 import static org.keycloak.operator.testsuite.utils.K8sUtils.deployKeycloak;
 import static org.keycloak.operator.testsuite.utils.K8sUtils.getResourceFromFile;
@@ -384,22 +388,75 @@ public class KeycloakDeploymentTest extends BaseOperatorTest {
         assertKeycloakAccessibleViaService(kc, false, httpPort);
     }
 
-    // Reference curl command:
-    // curl --insecure --data "grant_type=password&client_id=admin-cli&username=admin&password=adminPassword" https://localhost:8443/realms/master/protocol/openid-connect/token
+    @Test
+    public void testPodNamePropagation() {
+        var kc = getTestKeycloakDeployment(true);
+        var featureSpec = new FeatureSpec();
+        featureSpec.setEnabledFeatures(List.of("opentelemetry"));
+        kc.getSpec().setFeatureSpec(featureSpec);
+        kc.getSpec().getAdditionalOptions().add(new ValueOrSecret("tracing-enabled", "true"));
+        kc.getSpec().getAdditionalOptions().add(new ValueOrSecret("log-level", "io.opentelemetry:fine"));
+        deployKeycloak(k8sclient, kc, true);
+
+        Awaitility.await()
+                .ignoreExceptions()
+                .untilAsserted(() ->
+                        assertThat(k8sclient
+                                .pods()
+                                .inNamespace(namespace)
+                                .withLabel("app", "keycloak")
+                                .list()
+                                .getItems()
+                                .size()).isNotZero());
+
+        var pods = k8sclient
+                .pods()
+                .inNamespace(namespace)
+                .withLabels(Constants.DEFAULT_LABELS)
+                .list()
+                .getItems();
+
+        var envVars = pods.get(0).getSpec().getContainers().get(0).getEnv();
+        assertThat(envVars).isNotNull();
+        assertThat(envVars).isNotEmpty();
+
+        var serviceNameEnv = envVars.stream().filter(f -> f.getName().equals(KC_TRACING_SERVICE_NAME)).findAny().orElse(null);
+        assertThat(serviceNameEnv).isNotNull();
+        assertThat(serviceNameEnv.getValue()).isEqualTo(kc.getMetadata().getName());
+
+        var resourceAttributesEnv = envVars.stream().filter(f -> f.getName().equals(KC_TRACING_RESOURCE_ATTRIBUTES)).findAny().orElse(null);
+        assertThat(resourceAttributesEnv).isNotNull();
+
+        var expectedAttributes = Map.of(
+                "k8s.namespace.name", kc.getMetadata().getNamespace()
+        ).entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).collect(Collectors.joining(","));
+
+        assertThat(resourceAttributesEnv.getValue()).isEqualTo(expectedAttributes);
+    }
+
     @Test
     public void testInitialAdminUser() {
         var kc = getTestKeycloakDeployment(true);
         String secretName = KeycloakAdminSecretDependentResource.getName(kc);
+        assertInitialAdminUser(secretName, kc, false);
+    }
 
-        k8sclient
-                .resources(Keycloak.class)
-                .inNamespace(namespace)
-                .delete();
-        k8sclient
-                .secrets()
-                .inNamespace(namespace)
-                .withName(secretName)
-                .delete();
+    @Test
+    public void testCustomBootstrapAdminUser() {
+        var kc = getTestKeycloakDeployment(true);
+        String secretName = "my-secret";
+        // fluents don't seem to work here because of the inner classes
+        kc.getSpec().setBootstrapAdminSpec(new BootstrapAdminSpec());
+        kc.getSpec().getBootstrapAdminSpec().setUser(new BootstrapAdminSpec.User());
+        kc.getSpec().getBootstrapAdminSpec().getUser().setSecret(secretName);
+        k8sclient.resource(new SecretBuilder().withNewMetadata().withName(secretName).endMetadata()
+                .addToStringData("username", "user").addToStringData("password", "pass20rd").build()).create();
+        assertInitialAdminUser(secretName, kc, true);
+    }
+
+    // Reference curl command:
+    // curl --insecure --data "grant_type=password&client_id=admin-cli&username=admin&password=adminPassword" https://localhost:8443/realms/master/protocol/openid-connect/token
+    public void assertInitialAdminUser(String secretName, Keycloak kc, boolean samePasswordAfterReinstall) {
 
         // Making sure no other Keycloak pod is still around
         Awaitility.await()
@@ -422,6 +479,7 @@ public class KeycloakDeploymentTest extends BaseOperatorTest {
         AtomicReference<String> adminPassword = new AtomicReference<>();
         Awaitility.await()
                 .ignoreExceptions()
+                .atMost(3, TimeUnit.MINUTES)
                 .untilAsserted(() -> {
                     Log.info("Checking secret, ns: " + namespace + ", name: " + secretName);
                     var adminSecret = k8sclient
@@ -443,11 +501,12 @@ public class KeycloakDeploymentTest extends BaseOperatorTest {
                     assertTrue(curlOutput.contains("\"token_type\":\"Bearer\""));
                 });
 
-        // Redeploy the same Keycloak without redeploying the Database
+        // Redeploy the same Keycloak without redeploying the Database - the secret may change, but the admin password does not
         k8sclient.resource(kc).delete();
         deployKeycloak(k8sclient, kc, true);
         Awaitility.await()
                 .ignoreExceptions()
+                .atMost(3, TimeUnit.MINUTES)
                 .untilAsserted(() -> {
                     Log.info("Checking secret, ns: " + namespace + ", name: " + secretName);
                     var adminSecret = k8sclient
@@ -466,7 +525,7 @@ public class KeycloakDeploymentTest extends BaseOperatorTest {
 
                     assertTrue(curlOutput.contains("\"access_token\""));
                     assertTrue(curlOutput.contains("\"token_type\":\"Bearer\""));
-                    assertNotEquals(adminPassword.get(), newPassword);
+                    assertEquals(samePasswordAfterReinstall, adminPassword.get().equals(newPassword));
                 });
     }
 

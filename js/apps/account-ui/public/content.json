@@ -1,5 +1,5 @@
 [
-  { "label": "personalInfo", "path": "/" },
+  { "label": "personalInfo", "path": "" },
   {
     "label": "accountSecurity",
     "children": [
@@ -17,6 +17,11 @@
     "label": "groups",
     "path": "groups",
     "isVisible": "isViewGroupsEnabled"
+  },
+  {
+    "label": "organizations",
+    "path": "organizations",
+    "isVisible": "isViewOrganizationsEnabled"
   },
   {
     "label": "resources",

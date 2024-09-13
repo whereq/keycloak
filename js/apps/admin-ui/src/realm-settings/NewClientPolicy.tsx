@@ -4,6 +4,8 @@ import {
   HelpItem,
   KeycloakTextArea,
   TextControl,
+  useAlerts,
+  useFetch,
 } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
@@ -31,14 +33,12 @@ import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
 import { FormAccess } from "../components/form/FormAccess";
-import { KeycloakSpinner } from "../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { useParams } from "../utils/useParams";
 import { AddClientProfileModal } from "./AddClientProfileModal";
 import { toNewClientPolicyCondition } from "./routes/AddCondition";
@@ -237,7 +237,7 @@ export default function NewClientPolicy() {
           }),
         );
       } catch (error) {
-        addError(t("deleteClientPolicyError"), error);
+        addError("deleteClientPolicyError", error);
       }
     },
   });
@@ -262,7 +262,7 @@ export default function NewClientPolicy() {
               toEditClientPolicy({ realm, policyName: formValues.name! }),
             );
           } catch (error) {
-            addError(t("deleteConditionError"), error);
+            addError("deleteConditionError", error);
           }
         } else {
           const updatedPolicies = policies?.filter(
@@ -281,7 +281,7 @@ export default function NewClientPolicy() {
               }),
             );
           } catch (error) {
-            addError(t("deleteClientError"), error);
+            addError("deleteClientError", error);
           }
         }
       },
@@ -306,7 +306,7 @@ export default function NewClientPolicy() {
           form.setValue("profiles", currentPolicy?.profiles || []);
           navigate(toEditClientPolicy({ realm, policyName: formValues.name! }));
         } catch (error) {
-          addError(t("deleteClientPolicyProfileError"), error);
+          addError("deleteClientPolicyProfileError", error);
         }
       } else {
         const updatedPolicies = policies?.filter(
@@ -325,7 +325,7 @@ export default function NewClientPolicy() {
             }),
           );
         } catch (error) {
-          addError(t("deleteClientError"), error);
+          addError("deleteClientError", error);
         }
       }
     },

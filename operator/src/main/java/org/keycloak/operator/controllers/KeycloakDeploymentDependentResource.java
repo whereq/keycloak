@@ -23,6 +23,7 @@ import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.EnvVarSource;
 import io.fabric8.kubernetes.api.model.EnvVarSourceBuilder;
 import io.fabric8.kubernetes.api.model.PodSpec;
+import io.fabric8.kubernetes.api.model.PodSpecFluent;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.Secret;
 import io.fabric8.kubernetes.api.model.SecretKeySelector;
@@ -34,7 +35,7 @@ import io.fabric8.kubernetes.api.model.apps.StatefulSetSpec;
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.javaoperatorsdk.operator.api.reconciler.Context;
 import io.javaoperatorsdk.operator.processing.dependent.kubernetes.CRUDKubernetesDependentResource;
-import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependent;
+import io.javaoperatorsdk.operator.processing.dependent.kubernetes.KubernetesDependentResourceConfigBuilder;
 import io.quarkus.logging.Log;
 
 import org.keycloak.operator.Config;
@@ -45,6 +46,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.CacheSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpManagementSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.SchedulingSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.Truststore;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TruststoreSource;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
@@ -53,6 +55,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,14 +68,15 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import jakarta.inject.Inject;
-
 import static org.keycloak.operator.Utils.addResources;
 import static org.keycloak.operator.controllers.KeycloakDistConfigurator.getKeycloakOptionEnvVarName;
 import static org.keycloak.operator.crds.v2alpha1.CRDUtils.isTlsConfigured;
 
-@KubernetesDependent(labelSelector = Constants.DEFAULT_LABELS_AS_STRING)
 public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependentResource<StatefulSet, Keycloak> {
+
+    private static final List<String> COPY_ENV = Arrays.asList("HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY");
+
+    private static final String ZONE_KEY = "topology.kubernetes.io/zone";
 
     private static final String SERVICE_ACCOUNT_DIR = "/var/run/secrets/kubernetes.io/serviceaccount/";
     private static final String SERVICE_CA_CRT = SERVICE_ACCOUNT_DIR + "service-ca.crt";
@@ -81,24 +85,31 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
 
     public static final String KC_TRUSTSTORE_PATHS = "KC_TRUSTSTORE_PATHS";
 
+    // Tracing
+    public static final String KC_TRACING_SERVICE_NAME = "KC_TRACING_SERVICE_NAME";
+    public static final String KC_TRACING_RESOURCE_ATTRIBUTES = "KC_TRACING_RESOURCE_ATTRIBUTES";
+
     static final String JGROUPS_DNS_QUERY_PARAM = "-Djgroups.dns.query=";
 
     public static final String OPTIMIZED_ARG = "--optimized";
 
-    @Inject
     Config operatorConfig;
 
-    @Inject
     WatchedResources watchedResources;
 
-    @Inject
     KeycloakDistConfigurator distConfigurator;
 
     private boolean useServiceCaCrt;
 
-    public KeycloakDeploymentDependentResource() {
+    public KeycloakDeploymentDependentResource(Config operatorConfig, WatchedResources watchedResources, KeycloakDistConfigurator distConfigurator) {
         super(StatefulSet.class);
+        this.operatorConfig = operatorConfig;
+        this.watchedResources = watchedResources;
+        this.distConfigurator = distConfigurator;
         useServiceCaCrt = Files.exists(Path.of(SERVICE_CA_CRT));
+        this.configureWith(new KubernetesDependentResourceConfigBuilder<StatefulSet>()
+                .withLabelSelector(Constants.DEFAULT_LABELS_AS_STRING)
+                .build());
     }
 
     public void setUseServiceCaCrt(boolean useServiceCaCrt) {
@@ -224,6 +235,8 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
 
     private StatefulSet createBaseDeployment(Keycloak keycloakCR, Context<Keycloak> context) {
         Map<String, String> labels = Utils.allInstanceLabels(keycloakCR);
+        labels.put("app.kubernetes.io/component", "server");
+        Map<String, String> schedulingLabels = new LinkedHashMap<>(labels);
         if (operatorConfig.keycloak().podLabels() != null) {
             labels.putAll(operatorConfig.keycloak().podLabels());
         }
@@ -261,6 +274,7 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
         if (!specBuilder.hasDnsPolicy()) {
             specBuilder.withDnsPolicy("ClusterFirst");
         }
+        handleScheduling(keycloakCR, schedulingLabels, specBuilder);
 
         // there isn't currently an editOrNewFirstContainer, so we need to do this manually
         var containerBuilder = specBuilder.buildContainers().isEmpty() ? specBuilder.addNewContainer() : specBuilder.editFirstContainer();
@@ -350,6 +364,42 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
         return baseDeployment;
     }
 
+    private void handleScheduling(Keycloak keycloakCR, Map<String, String> labels, PodSpecFluent<?> specBuilder) {
+        SchedulingSpec schedulingSpec = keycloakCR.getSpec().getSchedulingSpec();
+        if (schedulingSpec != null) {
+            if (!specBuilder.hasPriorityClassName()) {
+                specBuilder.withPriorityClassName(schedulingSpec.getPriorityClassName());
+            }
+            if (!specBuilder.hasAffinity()) {
+                specBuilder.withAffinity(schedulingSpec.getAffinity());
+            }
+            if (!specBuilder.hasTolerations()) {
+                specBuilder.withTolerations(schedulingSpec.getTolerations());
+            }
+            if (!specBuilder.hasTopologySpreadConstraints()) {
+                specBuilder.withTopologySpreadConstraints(schedulingSpec.getTopologySpreadConstraints());
+            }
+        }
+
+        // set defaults if nothing was specified by the user
+        // - server pods will have an affinity for the same zone as to avoid stretch clusters
+        // - server pods will have a stronger anti-affinity for the same node
+
+        if (!specBuilder.hasAffinity()) {
+            specBuilder.editOrNewAffinity().withNewPodAffinity().addNewPreferredDuringSchedulingIgnoredDuringExecution()
+                    .withWeight(10).withNewPodAffinityTerm().withNewLabelSelector().withMatchLabels(labels)
+                    .endLabelSelector().withTopologyKey(ZONE_KEY).endPodAffinityTerm()
+                    .endPreferredDuringSchedulingIgnoredDuringExecution().endPodAffinity().endAffinity();
+
+            specBuilder.editOrNewAffinity().withNewPodAntiAffinity()
+                    .addNewPreferredDuringSchedulingIgnoredDuringExecution().withWeight(50).withNewPodAffinityTerm()
+                    .withNewLabelSelector().withMatchLabels(labels).endLabelSelector()
+                    .withTopologyKey("kubernetes.io/hostname").endPodAffinityTerm()
+                    .endPreferredDuringSchedulingIgnoredDuringExecution().endPodAntiAffinity().endAffinity();
+        }
+
+    }
+
     private static String getJGroupsParameter(Keycloak keycloakCR) {
         return JGROUPS_DNS_QUERY_PARAM + KeycloakDiscoveryServiceDependentResource.getName(keycloakCR) +"." + keycloakCR.getMetadata().getNamespace();
     }
@@ -357,8 +407,7 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
     private void addEnvVars(StatefulSet baseDeployment, Keycloak keycloakCR, TreeSet<String> allSecrets) {
         var firstClasssEnvVars = distConfigurator.configureDistOptions(keycloakCR);
 
-        String adminSecretName = KeycloakAdminSecretDependentResource.getName(keycloakCR);
-        var additionalEnvVars = getDefaultAndAdditionalEnvVars(keycloakCR, adminSecretName);
+        var additionalEnvVars = getDefaultAndAdditionalEnvVars(keycloakCR);
 
         var env = Optional.ofNullable(baseDeployment.getSpec().getTemplate().getSpec().getContainers().get(0).getEnv()).orElse(List.of());
 
@@ -375,27 +424,34 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
         // include the kube CA if the user is not controlling KC_TRUSTSTORE_PATHS via the unsupported or the additional
         varMap.putIfAbsent(KC_TRUSTSTORE_PATHS, new EnvVarBuilder().withName(KC_TRUSTSTORE_PATHS).withValue(truststores).build());
 
-        // TODO remove this once the --proxy option is finally removed from Keycloak
-        // not strictly necessary as --proxy-headers take precedence over --proxy but at least removes the warning
-        // about deprecated --proxy option in use
-        if (varMap.containsKey(getKeycloakOptionEnvVarName("proxy-headers"))) {
-            varMap.remove(getKeycloakOptionEnvVarName("proxy"));
-        }
+        varMap.putIfAbsent(KC_TRACING_SERVICE_NAME,
+                new EnvVarBuilder().withName(KC_TRACING_SERVICE_NAME)
+                        .withValue(keycloakCR.getMetadata().getName())
+                        .build()
+        );
+
+        // Possible OTel k8s attributes convention can be found here: https://opentelemetry.io/docs/specs/semconv/attributes-registry/k8s/#kubernetes-attributes
+        var tracingAttributes = Map.of("k8s.namespace.name", keycloakCR.getMetadata().getNamespace());
+
+        varMap.putIfAbsent(KC_TRACING_RESOURCE_ATTRIBUTES,
+                new EnvVarBuilder().withName(KC_TRACING_RESOURCE_ATTRIBUTES)
+                        .withValue(tracingAttributes.entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).collect(Collectors.joining(",")))
+                        .build()
+        );
 
         var envVars = new ArrayList<>(varMap.values());
         baseDeployment.getSpec().getTemplate().getSpec().getContainers().get(0).setEnv(envVars);
 
         // watch the secrets used by secret key - we don't currently expect configmaps, optional refs, or watch the initial-admin
         TreeSet<String> serverConfigSecretsNames = envVars.stream().map(EnvVar::getValueFrom).filter(Objects::nonNull)
-                .map(EnvVarSource::getSecretKeyRef).filter(Objects::nonNull).map(SecretKeySelector::getName)
-                .filter(n -> !n.equals(adminSecretName)).collect(Collectors.toCollection(TreeSet::new));
+                .map(EnvVarSource::getSecretKeyRef).filter(Objects::nonNull).map(SecretKeySelector::getName).collect(Collectors.toCollection(TreeSet::new));
 
         Log.debugf("Found config secrets names: %s", serverConfigSecretsNames);
 
         allSecrets.addAll(serverConfigSecretsNames);
     }
 
-    private List<EnvVar> getDefaultAndAdditionalEnvVars(Keycloak keycloakCR, String adminSecretName) {
+    private List<EnvVar> getDefaultAndAdditionalEnvVars(Keycloak keycloakCR) {
         // default config values
         List<ValueOrSecret> serverConfigsList = new ArrayList<>(Constants.DEFAULT_DIST_CONFIG_LIST);
 
@@ -419,30 +475,14 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
                     }
                     return envBuilder.build();
                 })
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
 
-        envVars.add(
-                new EnvVarBuilder()
-                        .withName("KEYCLOAK_ADMIN")
-                        .withNewValueFrom()
-                        .withNewSecretKeyRef()
-                        .withName(adminSecretName)
-                        .withKey("username")
-                        .withOptional(false)
-                        .endSecretKeyRef()
-                        .endValueFrom()
-                        .build());
-        envVars.add(
-                new EnvVarBuilder()
-                        .withName("KEYCLOAK_ADMIN_PASSWORD")
-                        .withNewValueFrom()
-                        .withNewSecretKeyRef()
-                        .withName(adminSecretName)
-                        .withKey("password")
-                        .withOptional(false)
-                        .endSecretKeyRef()
-                        .endValueFrom()
-                        .build());
+        for (String env : COPY_ENV) {
+            String value = System.getenv(env);
+            if (value != null) {
+                envVars.add(new EnvVarBuilder().withName(env).withValue(value).build());
+            }
+        }
 
         return envVars;
     }
@@ -461,13 +501,13 @@ public class KeycloakDeploymentDependentResource extends CRUDKubernetesDependent
         var reconciledContainer = reconciledDeployment.getSpec().getTemplate().getSpec().getContainers().get(0);
 
         if (!previousContainer.getImage().equals(reconciledContainer.getImage())
-                && previousDeployment.getStatus().getReplicas() > 1) {
+                && previousDeployment.getStatus().getReplicas() > 0) {
             // TODO Check if migration is really needed (e.g. based on actual KC version); https://github.com/keycloak/keycloak/issues/10441
             Log.info("Detected changed Keycloak image, assuming Keycloak upgrade. Scaling down the deployment to one instance to perform a safe database migration");
             Log.infof("original image: %s; new image: %s", previousContainer.getImage(), reconciledContainer.getImage());
 
             reconciledContainer.setImage(previousContainer.getImage());
-            reconciledDeployment.getSpec().setReplicas(1);
+            reconciledDeployment.getSpec().setReplicas(0);
 
             reconciledDeployment.getMetadata().getAnnotations().put(Constants.KEYCLOAK_MIGRATING_ANNOTATION, Boolean.TRUE.toString());
         }

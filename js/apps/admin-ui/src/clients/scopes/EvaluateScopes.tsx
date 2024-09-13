@@ -3,6 +3,14 @@ import type ProtocolMapperRepresentation from "@keycloak/keycloak-admin-client/l
 import type RoleRepresentation from "@keycloak/keycloak-admin-client/lib/defs/roleRepresentation";
 import type { ProtocolMapperTypeRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/serverInfoRepesentation";
 import {
+  HelpItem,
+  KeycloakDataTable,
+  KeycloakSelect,
+  SelectVariant,
+  useFetch,
+  useHelp,
+} from "@keycloak/keycloak-ui-shared";
+import {
   ClipboardCopy,
   Form,
   FormGroup,
@@ -23,22 +31,15 @@ import { QuestionCircleIcon } from "@patternfly/react-icons";
 import { useEffect, useRef, useState } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HelpItem, useHelp } from "@keycloak/keycloak-ui-shared";
 import { useAdminClient } from "../../admin-client";
-import { KeycloakDataTable } from "../../components/table-toolbar/KeycloakDataTable";
 import { UserSelect } from "../../components/users/UserSelect";
 import { useAccess } from "../../context/access/Access";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useServerInfo } from "../../context/server-info/ServerInfoProvider";
 import { prettyPrintJSON } from "../../util";
-import { useFetch } from "../../utils/useFetch";
 import { GeneratedCodeTab } from "./GeneratedCodeTab";
 
 import "./evaluate.css";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../components/select/KeycloakSelect";
 
 export type EvaluateScopesProps = {
   clientId: string;
@@ -184,9 +185,9 @@ export const EvaluateScopes = ({ clientId, protocol }: EvaluateScopesProps) => {
     ({ mapperList, effectiveRoles }) => {
       setEffectiveRoles(effectiveRoles);
       mapperList.map((mapper) => {
-        mapper.type = mapperTypes.filter(
+        mapper.type = mapperTypes.find(
           (type) => type.id === mapper.protocolMapper,
-        )[0];
+        )!;
       });
 
       setProtocolMappers(mapperList);
@@ -271,7 +272,9 @@ export const EvaluateScopes = ({ clientId, protocol }: EvaluateScopesProps) => {
                   placeholderText={t("scopeParameterPlaceholder")}
                 >
                   {selectableScopes.map((option, index) => (
-                    <SelectOption key={index} value={option.name} />
+                    <SelectOption key={index} value={option.name}>
+                      {option.name}
+                    </SelectOption>
                   ))}
                 </KeycloakSelect>
               </SplitItem>

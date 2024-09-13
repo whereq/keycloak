@@ -29,7 +29,6 @@ import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.Response.Status;
 import jakarta.ws.rs.ext.Provider;
 
-import java.util.Objects;
 import java.util.stream.Stream;
 
 import org.eclipse.microprofile.openapi.annotations.Operation;
@@ -42,6 +41,7 @@ import org.keycloak.models.ModelException;
 import org.keycloak.models.OrganizationModel;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.utils.ModelToRepresentation;
+import org.keycloak.models.utils.StripSecretsUtils;
 import org.keycloak.organization.OrganizationProvider;
 import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.services.ErrorResponse;
@@ -53,6 +53,7 @@ import org.keycloak.services.resources.admin.AdminEventBuilder;
 public class OrganizationIdentityProvidersResource {
 
     private final RealmModel realm;
+    private final KeycloakSession session;
     private final OrganizationProvider organizationProvider;
     private final OrganizationModel organization;
 
@@ -63,6 +64,7 @@ public class OrganizationIdentityProvidersResource {
 
     public OrganizationIdentityProvidersResource(KeycloakSession session, OrganizationModel organization, AdminEventBuilder adminEvent) {
         this.realm = session == null ? null : session.getContext().getRealm();
+        this.session = session;
         this.organizationProvider = session == null ? null : session.getProvider(OrganizationProvider.class);
         this.organization = organization;
     }
@@ -75,9 +77,7 @@ public class OrganizationIdentityProvidersResource {
                 "or if it is already associated with the organization, an error response is returned")
     public Response addIdentityProvider(String id) {
         try {
-            IdentityProviderModel identityProvider =  this.realm.getIdentityProvidersStream()
-                    .filter(p -> Objects.equals(p.getAlias(), id) || Objects.equals(p.getInternalId(), id))
-                    .findFirst().orElse(null);
+            IdentityProviderModel identityProvider = session.identityProviders().getByIdOrAlias(id);
 
             if (identityProvider == null) {
                 throw ErrorResponse.error("Identity provider not found with the given alias", Status.BAD_REQUEST);
@@ -111,13 +111,13 @@ public class OrganizationIdentityProvidersResource {
         description = "Searches for an identity provider with the given alias. If one is found and is associated with the " +
                 "organization, it is returned. Otherwise, an error response with status NOT_FOUND is returned")
     public IdentityProviderRepresentation getIdentityProvider(@PathParam("alias") String alias) {
-        IdentityProviderModel broker = realm.getIdentityProviderByAlias(alias);
+        IdentityProviderModel broker = session.identityProviders().getByAlias(alias);
 
         if (!isOrganizationBroker(broker)) {
             throw ErrorResponse.error("Identity provider not associated with the organization", Status.NOT_FOUND);
         }
 
-        return ModelToRepresentation.toRepresentation(realm, broker);
+        return toRepresentation(broker);
     }
 
     @Path("{alias}")
@@ -128,7 +128,7 @@ public class OrganizationIdentityProvidersResource {
         description = "Breaks the association between the identity provider and the organization. The provider itself is not deleted. " +
                 "If no provider is found, or if it is not currently associated with the org, an error response is returned")
     public Response delete(@PathParam("alias") String alias) {
-        IdentityProviderModel broker = realm.getIdentityProviderByAlias(alias);
+        IdentityProviderModel broker = session.identityProviders().getByAlias(alias);
 
         if (!isOrganizationBroker(broker)) {
             throw ErrorResponse.error("Identity provider not found with the given alias", Status.NOT_FOUND);
@@ -142,7 +142,7 @@ public class OrganizationIdentityProvidersResource {
     }
 
     private IdentityProviderRepresentation toRepresentation(IdentityProviderModel idp) {
-        return ModelToRepresentation.toRepresentation(realm, idp);
+        return StripSecretsUtils.stripSecrets(session, ModelToRepresentation.toRepresentation(realm, idp));
     }
 
     private boolean isOrganizationBroker(IdentityProviderModel broker) {

@@ -65,6 +65,7 @@ public class WebAuthnOtherSettingsTest extends AbstractWebAuthnVirtualTest {
     protected AppPage appPage;
 
     @Test
+    @IgnoreBrowserDriver(FirefoxDriver.class) // See https://github.com/keycloak/keycloak/issues/10368
     public void defaultValues() {
         registerDefaultUser("webauthn");
 
@@ -78,6 +79,14 @@ public class WebAuthnOtherSettingsTest extends AbstractWebAuthnVirtualTest {
         assertThat(userId, notNullValue());
 
         events.expectRequiredAction(EventType.CUSTOM_REQUIRED_ACTION)
+                .user(userId)
+                .detail(Details.CUSTOM_REQUIRED_ACTION, isPasswordless()
+                        ? WebAuthnPasswordlessRegisterFactory.PROVIDER_ID
+                        : WebAuthnRegisterFactory.PROVIDER_ID)
+                .detail(WebAuthnConstants.PUBKEY_CRED_LABEL_ATTR, "webauthn")
+                .detail(WebAuthnConstants.PUBKEY_CRED_AAGUID_ATTR, ALL_ZERO_AAGUID)
+                .assertEvent();
+        events.expectRequiredAction(EventType.UPDATE_CREDENTIAL)
                 .user(userId)
                 .detail(Details.CUSTOM_REQUIRED_ACTION, isPasswordless()
                         ? WebAuthnPasswordlessRegisterFactory.PROVIDER_ID
@@ -113,7 +122,7 @@ public class WebAuthnOtherSettingsTest extends AbstractWebAuthnVirtualTest {
     }
 
     @Test
-    @IgnoreBrowserDriver(FirefoxDriver.class)
+    @IgnoreBrowserDriver(FirefoxDriver.class) // See https://github.com/keycloak/keycloak/issues/10368
     public void timeout() throws IOException {
         final Integer TIMEOUT = 3; //seconds
 
@@ -156,6 +165,7 @@ public class WebAuthnOtherSettingsTest extends AbstractWebAuthnVirtualTest {
     }
 
     @Test
+    @IgnoreBrowserDriver(FirefoxDriver.class) // See https://github.com/keycloak/keycloak/issues/10368
     public void excludeCredentials() throws IOException {
         List<String> acceptableAaguids = Collections.singletonList(ALL_ONE_AAGUID);
 

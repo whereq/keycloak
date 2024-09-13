@@ -29,6 +29,8 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -37,6 +39,8 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -164,7 +168,7 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         if (suiteContext.get().isAuthServerMigrationEnabled()) {
             commands.add("--hostname-strict=false");
             commands.add("--hostname-strict-https=false");
-        } else { // Do not set management port for older versions of Keycloak for migration tests - available since Keycloak ~22
+        } else { // Do not set management port for older versions of Keycloak for migration tests - available since Keycloak 25
             commands.add("--http-management-port=" + configuration.getManagementPort());
         }
 
@@ -207,6 +211,17 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         addStorageOptions(storeProvider, commands);
         addFeaturesOption(commands);
 
+        var features = getDefaultFeatures();
+        if (features.contains("remote-cache") || features.contains("multi-site")) {
+            commands.add("--cache-remote-host=127.0.0.1");
+            commands.add("--cache-remote-username=keycloak");
+            commands.add("--cache-remote-password=Password1!");
+            commands.add("--cache-remote-tls-enabled=false");
+            commands.add("--spi-connections-infinispan-quarkus-site-name=test");
+            configuration.appendJavaOpts("-Dkc.cache-remote-create-caches=true");
+            System.setProperty("kc.cache-remote-create-caches", "true");
+        }
+
         return commands;
     }
 
@@ -217,12 +232,14 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
     private static void prepareCommandsForRebuilding(List<String> commands) {
         commands.removeIf("--optimized"::equals);
         commands.add("--http-relative-path=/auth");
+        commands.add("--health-enabled=true"); // expose something to management interface to turn it on
     }
 
     protected void addFeaturesOption(List<String> commands) {
-        String defaultFeatures = configuration.getDefaultFeatures();
+        String enabledFeatures = configuration.getEnabledFeatures();
+        String disabledFeatures = configuration.getDisabledFeatures();
 
-        if (StringUtil.isBlank(defaultFeatures)) {
+        if (StringUtil.isBlank(enabledFeatures) && StringUtil.isBlank(disabledFeatures)) {
             return;
         }
 
@@ -230,24 +247,32 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
             return;
         }
 
-        StringBuilder featuresOption = new StringBuilder("--features=").append(defaultFeatures);
-        Iterator<String> iterator = commands.iterator();
+        if (!StringUtil.isBlank(enabledFeatures)) {
+            appendOrAddCommand(commands, "--features=", enabledFeatures);
+        }
 
-        while (iterator.hasNext()) {
-            String command = iterator.next();
-
-            if (command.startsWith("--features")) {
-                featuresOption = new StringBuilder(command);
-                featuresOption.append(",").append(defaultFeatures);
-                iterator.remove();
-                break;
-            }
+        if (!StringUtil.isBlank(disabledFeatures)) {
+            appendOrAddCommand(commands, "--features-disabled=", disabledFeatures);
         }
 
         // enabling or disabling features requires rebuilding the image
         prepareCommandsForRebuilding(commands);
+    }
 
-        commands.add(featuresOption.toString());
+    private void appendOrAddCommand(List<String> commands, String command, String addition) {
+        Iterator<String> iterator = commands.iterator();
+
+        while (iterator.hasNext()) {
+            String existingCommand = iterator.next();
+
+            if (existingCommand.startsWith(command)) {
+                iterator.remove();
+                commands.add(existingCommand + "," + addition);
+                return;
+            }
+        }
+
+        commands.add(command + addition);
     }
 
     protected List<String> configureArgs(List<String> commands) {
@@ -406,5 +431,13 @@ public abstract class AbstractQuarkusDeployableContainer implements DeployableCo
         commands.add("--log-level=INFO,org.keycloak.common.crypto:TRACE,org.keycloak.crypto:TRACE,org.keycloak.truststore:TRACE");
 
         configuration.appendJavaOpts("-Djava.security.properties=" + System.getProperty("auth.server.java.security.file"));
+    }
+
+    private Collection<String> getDefaultFeatures() {
+        var features = configuration.getEnabledFeatures();
+        if (features == null || features.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(features.split(",")).collect(Collectors.toSet());
     }
 }

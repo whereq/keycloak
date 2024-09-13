@@ -39,12 +39,10 @@ import org.keycloak.protocol.oid4vc.issuance.mappers.OID4VCTargetRoleMapper;
 import org.keycloak.protocol.oid4vc.issuance.mappers.OID4VCUserAttributeMapper;
 import org.keycloak.protocol.oid4vc.issuance.signing.VCSigningServiceProviderFactory;
 import org.keycloak.protocol.oid4vc.issuance.signing.VerifiableCredentialsSigningService;
-import org.keycloak.protocol.oid4vc.model.Format;
 import org.keycloak.provider.ProviderFactory;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.services.managers.AppAuthManager;
 
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -99,12 +97,13 @@ public class OID4VCLoginProtocolFactory implements LoginProtocolFactory, OID4VCE
         return builtins;
     }
 
-    private void addServiceFromComponent(Map<Format, VerifiableCredentialsSigningService> signingServices, KeycloakSession keycloakSession, ComponentModel componentModel) {
+    private void addServiceFromComponent(Map<String, VerifiableCredentialsSigningService> signingServices, KeycloakSession keycloakSession, ComponentModel componentModel) {
         ProviderFactory<VerifiableCredentialsSigningService> factory = keycloakSession
                 .getKeycloakSessionFactory()
                 .getProviderFactory(VerifiableCredentialsSigningService.class, componentModel.getProviderId());
         if (factory instanceof VCSigningServiceProviderFactory sspf) {
-            signingServices.put(sspf.supportedFormat(), sspf.create(keycloakSession, componentModel));
+            VerifiableCredentialsSigningService verifiableCredentialsSigningService = sspf.create(keycloakSession, componentModel);
+            signingServices.put(verifiableCredentialsSigningService.locator(), verifiableCredentialsSigningService);
         } else {
             throw new IllegalArgumentException(String.format("The component %s is not a VerifiableCredentialsSigningServiceProviderFactory", componentModel.getProviderId()));
         }
@@ -114,7 +113,7 @@ public class OID4VCLoginProtocolFactory implements LoginProtocolFactory, OID4VCE
     @Override
     public Object createProtocolEndpoint(KeycloakSession keycloakSession, EventBuilder event) {
 
-        Map<Format, VerifiableCredentialsSigningService> signingServices = new EnumMap<>(Format.class);
+        Map<String, VerifiableCredentialsSigningService> signingServices = new HashMap<>();
         RealmModel realm = keycloakSession.getContext().getRealm();
         realm.getComponentsStream(realm.getId(), VerifiableCredentialsSigningService.class.getName())
                 .forEach(cm -> addServiceFromComponent(signingServices, keycloakSession, cm));

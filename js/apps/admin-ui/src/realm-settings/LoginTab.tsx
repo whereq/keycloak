@@ -3,7 +3,7 @@ import { FormGroup, PageSection, Switch } from "@patternfly/react-core";
 import { useTranslation } from "react-i18next";
 import { FormPanel, HelpItem } from "@keycloak/keycloak-ui-shared";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { FormAccess } from "../components/form/FormAccess";
 import { useRealm } from "../context/realm-context/RealmContext";
 
@@ -42,7 +42,7 @@ export const RealmSettingsLoginTab = ({
       addAlert(t("enableSwitchSuccess", { switch: t(name) }));
       refresh();
     } catch (error) {
-      addError(t("enableSwitchError"), error);
+      addError("enableSwitchError", error);
     }
   };
 

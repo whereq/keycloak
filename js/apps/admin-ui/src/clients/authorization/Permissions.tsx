@@ -1,6 +1,12 @@
 import type PolicyProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyProviderRepresentation";
 import type PolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/policyRepresentation";
 import {
+  ListEmptyState,
+  PaginatingTableToolbar,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   Alert,
   AlertVariant,
   ButtonVariant,
@@ -26,13 +32,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../../context/realm-context/RealmContext";
-import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
 import { toNewPermission } from "../routes/NewPermission";
 import { toPermissionDetails } from "../routes/PermissionDetails";
@@ -61,7 +63,7 @@ const AssociatedPoliciesRenderer = ({
 }) => {
   return (
     <>
-      {row.associatedPolicies?.[0]?.name}{" "}
+      {row.associatedPolicies?.[0]?.name || "—"}{" "}
       <MoreLabel array={row.associatedPolicies} />
     </>
   );
@@ -208,6 +210,7 @@ export const AuthorizationPermissions = ({
               </ToolbarItem>
               <ToolbarItem>
                 <Dropdown
+                  onOpenChange={toggleCreate}
                   toggle={(ref) => (
                     <MenuToggle
                       ref={ref}
@@ -320,7 +323,7 @@ export const AuthorizationPermissions = ({
                     <Td>
                       <AssociatedPoliciesRenderer row={permission} />
                     </Td>
-                    <Td>{permission.description}</Td>
+                    <Td>{permission.description || "—"}</Td>
                     <Td
                       actions={{
                         items: [

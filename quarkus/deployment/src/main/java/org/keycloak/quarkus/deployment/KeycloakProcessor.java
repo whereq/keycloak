@@ -17,14 +17,17 @@
 
 package org.keycloak.quarkus.deployment;
 
+import io.quarkus.agroal.runtime.DataSourcesJdbcBuildTimeConfig;
+import io.quarkus.agroal.runtime.TransactionIntegration;
 import io.quarkus.agroal.runtime.health.DataSourceHealthCheck;
 import io.quarkus.agroal.spi.JdbcDataSourceBuildItem;
 import io.quarkus.agroal.spi.JdbcDriverBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BuildTimeConditionBuildItem;
-import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.bootstrap.logging.InitialConfigurator;
+import io.quarkus.builder.item.EmptyBuildItem;
 import io.quarkus.datasource.deployment.spi.DevServicesDatasourceResultBuildItem;
+import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -50,10 +53,12 @@ import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.smallrye.config.ConfigValue;
 import org.eclipse.microprofile.health.Readiness;
 import org.hibernate.cfg.AvailableSettings;
+import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
+import org.jboss.jandex.AnnotationTransformation;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
@@ -68,6 +73,7 @@ import org.keycloak.authorization.policy.provider.PolicySpi;
 import org.keycloak.authorization.policy.provider.js.DeployedScriptPolicyFactory;
 import org.keycloak.common.Profile;
 import org.keycloak.common.crypto.FipsMode;
+import org.keycloak.common.util.MultiSiteUtils;
 import org.keycloak.common.util.StreamUtil;
 import org.keycloak.config.DatabaseOptions;
 import org.keycloak.config.HealthOptions;
@@ -265,11 +271,31 @@ class KeycloakProcessor {
                 // We do not want to initialize the JDBC driver class
                 Class.forName(dbDriver.get(), false, Thread.currentThread().getContextClassLoader());
             } catch (ClassNotFoundException e) {
-                // Ignore queued TRACE and DEBUG messages for not initialized log handlers
-                InitialConfigurator.DELAYED_HANDLER.setBuildTimeHandlers(new Handler[]{});
-                throw new ConfigurationException(String.format("Unable to find the JDBC driver (%s). You need to install it.", dbDriver.get()));
+                throwConfigError(String.format("Unable to find the JDBC driver (%s). You need to install it.", dbDriver.get()));
             }
         }
+    }
+
+    // Inspired by AgroalProcessor
+    @BuildStep
+    @Produce(CheckMultipleDatasourcesBuildStep.class)
+    void checkMultipleDatasourcesUseXA(DataSourcesBuildTimeConfig dataSourcesConfig, DataSourcesJdbcBuildTimeConfig jdbcConfig) {
+        long nonXADatasourcesCount = dataSourcesConfig.dataSources().keySet().stream()
+                .map(ds -> jdbcConfig.dataSources().get(ds).jdbc())
+                .filter(jdbc -> jdbc.enabled() && jdbc.transactions() != TransactionIntegration.XA)
+                .count();
+        if (nonXADatasourcesCount > 1) {
+            throwConfigError("Multiple datasources are configured but more than 1 is using non-XA transactions. " +
+                    "All the datasources except one must must be XA to be able to use Last Resource Commit Optimization (LRCO). " +
+                    "Please update your configuration by setting --transaction-xa-enabled=true " +
+                    "and/or quarkus.datasource.<your-datasource-name>.jdbc.transactions=xa.");
+        }
+    }
+
+    private void throwConfigError(String msg) {
+        // Ignore queued TRACE and DEBUG messages for not initialized log handlers
+        InitialConfigurator.DELAYED_HANDLER.setBuildTimeHandlers(new Handler[]{});
+        throw new ConfigurationException(msg);
     }
 
     /**
@@ -317,7 +343,7 @@ class KeycloakProcessor {
         List<String> userManagedEntities = new ArrayList<>();
 
         for (PersistenceXmlDescriptorBuildItem item : descriptors) {
-            ParsedPersistenceXmlDescriptor descriptor = item.getDescriptor();
+            ParsedPersistenceXmlDescriptor descriptor = (ParsedPersistenceXmlDescriptor) item.getDescriptor();
 
             if ("keycloak-default".equals(descriptor.getName())) {
                 defaultUnitDescriptor = descriptor;
@@ -342,6 +368,7 @@ class KeycloakProcessor {
 
     @BuildStep
     @Consume(CheckJdbcBuildStep.class)
+    @Consume(CheckMultipleDatasourcesBuildStep.class)
     void produceDefaultPersistenceUnit(BuildProducer<PersistenceXmlDescriptorBuildItem> producer) {
         ParsedPersistenceXmlDescriptor descriptor = PersistenceXmlParser.locateIndividualPersistenceUnit(
                 Thread.currentThread().getContextClassLoader().getResource("default-persistence.xml"));
@@ -468,7 +495,7 @@ class KeycloakProcessor {
             Map<String, ProviderFactory> preConfiguredProviders, Spi spi) {
         descriptors.stream()
                 .map(PersistenceXmlDescriptorBuildItem::getDescriptor)
-                .map(ParsedPersistenceXmlDescriptor::getName)
+                .map(PersistenceUnitDescriptor::getName)
                 .filter(Predicate.not("keycloak-default"::equals)).forEach((String unitName) -> {
                     NamedJpaConnectionProviderFactory factory = new NamedJpaConnectionProviderFactory();
 
@@ -541,10 +568,10 @@ class KeycloakProcessor {
             Configuration.markAsOptimized(properties);
         }
 
-        String profile = Environment.getProfile();
+        String profile = org.keycloak.common.util.Environment.getProfile();
 
         if (profile != null) {
-            properties.put(Environment.PROFILE, profile);
+            properties.put(org.keycloak.common.util.Environment.PROFILE, profile);
             properties.put(LaunchMode.current().getProfileKey(), profile);
         }
 
@@ -624,9 +651,9 @@ class KeycloakProcessor {
     // bean without the @Readiness annotation so it won't be used as a health check on it's own.
     @BuildStep
     AnnotationsTransformerBuildItem disableDefaultDataSourceHealthCheck() {
-        return new AnnotationsTransformerBuildItem(AnnotationsTransformer.appliedToClass()
+        return new AnnotationsTransformerBuildItem(AnnotationTransformation.forClasses()
                 .whenClass(c -> c.name().equals(DotName.createSimple(DataSourceHealthCheck.class)))
-                .thenTransform(t -> t.remove(
+                .transform(t -> t.remove(
                         a -> a.name().equals(DotName.createSimple(Readiness.class)))));
     }
 
@@ -644,7 +671,7 @@ class KeycloakProcessor {
                     JsResource.class.getName())), false));
         }
 
-        if (!Profile.isFeatureEnabled(Profile.Feature.MULTI_SITE)) {
+        if (!MultiSiteUtils.isMultiSiteEnabled()) {
             buildTimeConditionBuildItemBuildProducer.produce(new BuildTimeConditionBuildItem(index.getIndex().getClassByName(DotName.createSimple(
                     LoadBalancerResource.class.getName())), false));
         }

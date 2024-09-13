@@ -1,3 +1,4 @@
+import { KeycloakSelect } from "@keycloak/keycloak-ui-shared";
 import {
   Dropdown,
   DropdownItem,
@@ -9,7 +10,6 @@ import {
 import { FilterIcon } from "@patternfly/react-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { KeycloakSelect } from "../../components/select/KeycloakSelect";
 
 export type SearchType = "default" | "attribute";
 
@@ -43,6 +43,7 @@ export const SearchDropdown = ({
   return (
     <Dropdown
       className="keycloak__users__searchtype"
+      onOpenChange={(isOpen) => setSearchToggle(isOpen)}
       toggle={(ref) => (
         <MenuToggle
           ref={ref}

@@ -96,6 +96,13 @@ public class ClientTest extends AbstractAdminTest {
         Assert.assertNames(realm.clients().findAll(), "account", "account-console", "realm-management", "security-admin-console", "broker", Constants.ADMIN_CLI_CLIENT_ID);
     }
 
+    @Test
+    public void getRealmClients() {
+        assertTrue(realm.clients().findAll().stream().filter(client-> client.getAttributes().get(Constants.REALM_CLIENT).equals("true"))
+                .map(ClientRepresentation::getClientId)
+                .allMatch(clientId -> clientId.equals(Constants.REALM_MANAGEMENT_CLIENT_ID) || clientId.equals(Constants.BROKER_SERVICE_CLIENT_ID) || clientId.endsWith("-realm")));
+    }
+
     private ClientRepresentation createClient() {
         return createClient(null);
     }
@@ -122,7 +129,7 @@ public class ClientTest extends AbstractAdminTest {
 
         return rep;
     }
-    
+
     private ClientRepresentation createClientNonPublic() {
         ClientRepresentation rep = new ClientRepresentation();
         rep.setClientId("my-app");
@@ -142,7 +149,7 @@ public class ClientTest extends AbstractAdminTest {
 
         return rep;
     }
-    
+
     @Test
     public void createClientVerifyWithSecret() {
         String id = createClientNonPublic().getId();
@@ -442,14 +449,14 @@ public class ClientTest extends AbstractAdminTest {
 
         assertAdminEvents.assertEvent(realmId, OperationType.CREATE, AdminEventPaths.roleResourceCompositesPath(Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + REALM_NAME), Collections.singletonList(role), ResourceType.REALM_ROLE);
 
-        assertThat(realm.roles().get(Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + REALM_NAME).getRoleComposites().stream().map(RoleRepresentation::getName).collect(Collectors.toSet()), 
+        assertThat(realm.roles().get(Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + REALM_NAME).getRoleComposites().stream().map(RoleRepresentation::getName).collect(Collectors.toSet()),
                 hasItem(role.getName()));
 
         realm.clients().get(id).roles().deleteRole("test");
 
         assertAdminEvents.assertEvent(realmId, OperationType.DELETE, AdminEventPaths.clientRoleResourcePath(id, "test"), ResourceType.CLIENT_ROLE);
 
-        assertThat(realm.roles().get(Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + REALM_NAME).getRoleComposites().stream().map(RoleRepresentation::getName).collect(Collectors.toSet()), 
+        assertThat(realm.roles().get(Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + REALM_NAME).getRoleComposites().stream().map(RoleRepresentation::getName).collect(Collectors.toSet()),
                 not(hasItem(role)));
     }
 
@@ -470,31 +477,39 @@ public class ClientTest extends AbstractAdminTest {
         newClient.setClientId(client.getClientId());
         newClient.setBaseUrl("http://baseurl");
 
-        realm.clients().get(client.getId()).update(newClient);
+        ClientResource clientRes = realm.clients().get(client.getId());
+        clientRes.update(newClient);
 
         assertAdminEvents.assertEvent(realmId, OperationType.UPDATE, AdminEventPaths.clientResourcePath(client.getId()), newClient, ResourceType.CLIENT);
 
-        ClientRepresentation storedClient = realm.clients().get(client.getId()).toRepresentation();
+        ClientRepresentation storedClient = clientRes.toRepresentation();
 
+        assertNull(storedClient.getSecret());
+        assertNull(clientRes.getSecret().getValue());
         assertClient(client, storedClient);
 
-        newClient.setSecret("new-secret");
+        client.setPublicClient(false);
+        newClient.setPublicClient(client.isPublicClient());
+        client.setSecret("new-secret");
+        newClient.setSecret(client.getSecret());
 
-        realm.clients().get(client.getId()).update(newClient);
+        clientRes.update(newClient);
 
         newClient.setSecret("**********"); // secrets are masked in events
 
         assertAdminEvents.assertEvent(realmId, OperationType.UPDATE, AdminEventPaths.clientResourcePath(client.getId()), newClient, ResourceType.CLIENT);
 
-        storedClient = realm.clients().get(client.getId()).toRepresentation();
+        storedClient = clientRes.toRepresentation();
         assertClient(client, storedClient);
 
+        storedClient.setSecret(null);
         storedClient.getAttributes().put(OIDCConfigAttributes.BACKCHANNEL_LOGOUT_URL, "");
 
-        realm.clients().get(storedClient.getId()).update(storedClient);
-        storedClient = realm.clients().get(client.getId()).toRepresentation();
+        clientRes.update(storedClient);
+        storedClient = clientRes.toRepresentation();
 
         assertFalse(storedClient.getAttributes().containsKey(OIDCConfigAttributes.BACKCHANNEL_LOGOUT_URL));
+        assertClient(client, storedClient);
     }
 
     @Test
@@ -558,7 +573,7 @@ public class ClientTest extends AbstractAdminTest {
 
         realm.clients().get(id).registerNode(Collections.singletonMap("node", "foo#"));
     }
-    
+
     @Test
     public void nodes() {
         testingClient.testApp().clearAdminActions();
@@ -924,6 +939,7 @@ public class ClientTest extends AbstractAdminTest {
         if (client.getBaseUrl() != null) Assert.assertEquals(client.getBaseUrl(), storedClient.getBaseUrl());
         if (client.isSurrogateAuthRequired() != null) Assert.assertEquals(client.isSurrogateAuthRequired(), storedClient.isSurrogateAuthRequired());
         if (client.getClientAuthenticatorType() != null) Assert.assertEquals(client.getClientAuthenticatorType(), storedClient.getClientAuthenticatorType());
+        if (client.getSecret() != null) Assert.assertEquals(client.getSecret(), storedClient.getSecret());
 
         if (client.getNotBefore() != null) {
             Assert.assertEquals(client.getNotBefore(), storedClient.getNotBefore());

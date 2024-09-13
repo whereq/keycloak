@@ -1,6 +1,9 @@
-import { KeycloakContext } from "@keycloak/keycloak-ui-shared";
-import { BaseEnvironment } from "@keycloak/keycloak-ui-shared/dist/context/environment";
+import {
+  KeycloakContext,
+  type BaseEnvironment,
+} from "@keycloak/keycloak-ui-shared";
 import Keycloak from "keycloak-js";
+
 import { joinPath } from "../utils/joinPath";
 import { CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON } from "./constants";
 
@@ -50,14 +53,20 @@ export async function request(
 
 export const url = (environment: BaseEnvironment, path: string) =>
   new URL(
-    joinPath(environment.authUrl, "realms", environment.realm, "account", path),
+    joinPath(
+      environment.serverBaseUrl,
+      "realms",
+      environment.realm,
+      "account",
+      path,
+    ),
   );
 
 export const token = (keycloak: Keycloak) =>
   async function getAccessToken() {
     try {
       await keycloak.updateToken(5);
-    } catch (error) {
+    } catch {
       await keycloak.login();
     }
 

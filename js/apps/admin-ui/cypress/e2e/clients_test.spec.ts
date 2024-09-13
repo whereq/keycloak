@@ -20,6 +20,7 @@ import CommonPage from "../support/pages/CommonPage";
 import AttributesTab from "../support/pages/admin-ui/manage/AttributesTab";
 import DedicatedScopesMappersTab from "../support/pages/admin-ui/manage/clients/client_details/DedicatedScopesMappersTab";
 import { ClientRegistrationPage } from "../support/pages/admin-ui/manage/clients/ClientRegistrationPage";
+import RealmSettingsPage from "../support/pages/admin-ui/manage/realm_settings/RealmSettingsPage";
 
 let itemId = "client_crud";
 const loginPage = new LoginPage();
@@ -30,6 +31,7 @@ const commonPage = new CommonPage();
 const listingPage = new ListingPage();
 const attributesTab = new AttributesTab();
 const dedicatedScopesMappersTab = new DedicatedScopesMappersTab();
+const realmSettings = new RealmSettingsPage();
 
 describe("Clients test", () => {
   const realmName = `clients-realm-${uuid()}`;
@@ -111,6 +113,24 @@ describe("Clients test", () => {
       await adminClient.inRealm(realmName, () =>
         adminClient.deleteClientScope(clientScopeNameOptionalType),
       );
+    });
+
+    it("Should check temporary admin service label (non)existence", () => {
+      commonPage.sidebar().goToRealm("master");
+      commonPage.sidebar().goToClients();
+      commonPage
+        .tableToolbarUtils()
+        .searchItem("temporary-admin-service", false);
+      commonPage.tableUtils().checkRowItemExists("temporary-admin-service");
+      commonPage
+        .tableUtils()
+        .checkTemporaryAdminLabelExists("temporary-admin-label");
+
+      commonPage.tableToolbarUtils().searchItem("admin-cli", false);
+      commonPage.tableUtils().checkRowItemExists("admin-cli");
+      commonPage
+        .tableUtils()
+        .checkTemporaryAdminLabelExists("temporary-admin-label", false);
     });
 
     it("Should list client scopes", () => {
@@ -777,7 +797,7 @@ describe("Clients test", () => {
       commonPage.sidebar().waitForPageLoad();
       rolesTab.goToAssociatedRolesTab();
 
-      cy.get('td[data-label="Name"]')
+      cy.get("td")
         .contains("manage-account")
         .parent()
         .within(() => {
@@ -878,6 +898,30 @@ describe("Clients test", () => {
       advancedTab.clickExcludeSessionStateSwitch();
       advancedTab.clickUseRefreshTokenForClientCredentialsGrantSwitch();
       advancedTab.revertCompatibility();
+    });
+
+    it("Client Offline Session Max", () => {
+      configureOfflineSessionMaxInRealmSettings(true);
+
+      cy.findByTestId("token-lifespan-clientOfflineSessionMax").should("exist");
+
+      configureOfflineSessionMaxInRealmSettings(false);
+
+      cy.findByTestId("token-lifespan-clientOfflineSessionMax").should(
+        "not.exist",
+      );
+
+      function configureOfflineSessionMaxInRealmSettings(enabled: boolean) {
+        commonPage.sidebar().goToRealmSettings();
+        realmSettings.goToSessionsTab();
+        realmSettings.setOfflineSessionMaxSwitch(enabled);
+        realmSettings.saveSessions();
+
+        commonPage.sidebar().goToClients();
+        commonPage.tableToolbarUtils().searchItem(client);
+        commonPage.tableUtils().clickRowItemLink(client);
+        clientDetailsPage.goToAdvancedTab();
+      }
     });
 
     it("Advanced settings", () => {

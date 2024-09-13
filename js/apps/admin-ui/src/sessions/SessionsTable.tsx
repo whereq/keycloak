@@ -11,20 +11,20 @@ import {
 } from "@patternfly/react-core";
 import { CubesIcon, InfoCircleIcon } from "@patternfly/react-icons";
 import { IRowData } from "@patternfly/react-table";
-import { MouseEvent, ReactNode, useMemo, useState } from "react";
+import { ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
 import { toClient } from "../clients/routes/Client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
+import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
 import {
   Action,
   Field,
   KeycloakDataTable,
   LoaderFunction,
-} from "../components/table-toolbar/KeycloakDataTable";
+} from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useWhoAmI } from "../context/whoami/WhoAmI";
 import { UserRoute, toUser } from "../user/routes/User";
@@ -165,11 +165,7 @@ export default function SessionsTable({
     },
   });
 
-  async function onClickRevoke(
-    event: MouseEvent,
-    rowIndex: number,
-    rowData: IRowData,
-  ) {
+  async function onClickRevoke(rowData: IRowData) {
     const session = rowData.data as UserSessionRepresentation;
     await adminClient.realms.deleteSession({
       realm,
@@ -180,11 +176,7 @@ export default function SessionsTable({
     refresh();
   }
 
-  async function onClickSignOut(
-    event: MouseEvent,
-    rowIndex: number,
-    rowData: IRowData,
-  ) {
+  async function onClickSignOut(rowData: IRowData) {
     const session = rowData.data as UserSessionRepresentation;
     await adminClient.realms.deleteSession({
       realm,
@@ -230,14 +222,14 @@ export default function SessionsTable({
             return [
               {
                 title: t("revoke"),
-                onClick: onClickRevoke,
+                onClick: () => onClickRevoke(rowData),
               } as Action<UserSessionRepresentation>,
             ];
           }
           return [
             {
               title: t("signOut"),
-              onClick: onClickSignOut,
+              onClick: () => onClickSignOut(rowData),
             } as Action<UserSessionRepresentation>,
           ];
         }}

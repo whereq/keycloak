@@ -1,6 +1,6 @@
 import ClientRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientRepresentation";
 import IdentityProviderRepresentation from "@keycloak/keycloak-admin-client/lib/defs/identityProviderRepresentation";
-import { expect, test } from "@playwright/test";
+import { Page, expect, test } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -13,8 +13,8 @@ import {
   findClientByClientId,
   inRealm,
 } from "../admin-client";
+import { SERVER_URL } from "../constants";
 import groupsIdPClient from "../realms/groups-idp.json" assert { type: "json" };
-import { getKeycloakServerUrl } from "../utils";
 
 const realm = "groups";
 
@@ -32,7 +32,6 @@ test.describe("Account linking", () => {
     groupIdPClientId = await createClient(
       groupsIdPClient as ClientRepresentation,
     );
-    const baseUrl = getKeycloakServerUrl();
     const idp: IdentityProviderRepresentation = {
       alias: "master-idp",
       providerId: "oidc",
@@ -41,12 +40,12 @@ test.describe("Account linking", () => {
         clientId: "groups-idp",
         clientSecret: "H0JaTc7VBu3HJR26vrzMxgidfJmgI5Dw",
         validateSignature: "false",
-        tokenUrl: `${baseUrl}/realms/master/protocol/openid-connect/token`,
-        jwksUrl: `${baseUrl}/realms/master/protocol/openid-connect/certs`,
-        issuer: `${baseUrl}/realms/master`,
-        authorizationUrl: `${baseUrl}/realms/master/protocol/openid-connect/auth`,
-        logoutUrl: `${baseUrl}/realms/master/protocol/openid-connect/logout`,
-        userInfoUrl: `${baseUrl}/realms/master/protocol/openid-connect/userinfo`,
+        tokenUrl: `${SERVER_URL}/realms/master/protocol/openid-connect/token`,
+        jwksUrl: `${SERVER_URL}/realms/master/protocol/openid-connect/certs`,
+        issuer: `${SERVER_URL}/realms/master`,
+        authorizationUrl: `${SERVER_URL}/realms/master/protocol/openid-connect/auth`,
+        logoutUrl: `${SERVER_URL}/realms/master/protocol/openid-connect/logout`,
+        userInfoUrl: `${SERVER_URL}/realms/master/protocol/openid-connect/userinfo`,
       },
     };
 
@@ -93,17 +92,24 @@ test.describe("Account linking", () => {
       .click();
 
     // Expect an error shown that the account cannot be unlinked
-    await expect(page.getByTestId("alerts")).toBeVisible();
+    await expect(page.getByTestId("last-alert")).toContainText(
+      "You can''t remove last federated identity as you don''t have a password.",
+    );
   });
 });
 
-async function updateProfile(page, firstName, lastName, email) {
+async function updateProfile(
+  page: Page,
+  firstName: string,
+  lastName: string,
+  email: string,
+) {
   await expect(
     page.getByRole("heading", { name: "Update Account Information" }),
   ).toBeVisible();
-  await page.getByLabel("Email", { exact: true }).fill(email);
-  await page.getByLabel("First name", { exact: true }).fill(firstName);
-  await page.getByLabel("Last name", { exact: true }).fill(lastName);
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("First name").fill(firstName);
+  await page.getByLabel("Last name").fill(lastName);
   await page.getByRole("button", { name: "Submit" }).click();
 }
 

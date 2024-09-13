@@ -16,9 +16,9 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { FormPanel } from "@keycloak/keycloak-ui-shared";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
+import { KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
 import { toIdentityProvider } from "../identity-providers/routes/IdentityProvider";
@@ -39,7 +39,7 @@ export const UserIdentityProviderLinks = ({
   const [federatedId, setFederatedId] = useState("");
   const [isLinkIdPModalOpen, setIsLinkIdPModalOpen] = useState(false);
 
-  const { realm, realmRepresentation } = useRealm();
+  const { realm } = useRealm();
   const { addAlert, addError } = useAlerts();
   const { t } = useTranslation();
   const { hasAccess, hasSomeAccess } = useAccess();
@@ -74,8 +74,8 @@ export const UserIdentityProviderLinks = ({
     return allFedIds;
   };
 
-  const getAvailableIdPs = () => {
-    return realmRepresentation?.identityProviders;
+  const getAvailableIdPs = async () => {
+    return adminClient.identityProviders.find();
   };
 
   const linkedIdPsLoader = async () => {
@@ -87,7 +87,7 @@ export const UserIdentityProviderLinks = ({
       (x) => x.identityProvider,
     );
 
-    return getAvailableIdPs()?.filter(
+    return (await getAvailableIdPs())?.filter(
       (item) => !linkedNames.includes(item.alias),
     )!;
   };
@@ -194,7 +194,6 @@ export const UserIdentityProviderLinks = ({
       {
         name: "identityProvider",
         displayKey: "name",
-        cellFormatters: [emptyFormatter()],
         cellRenderer: idpLinkRenderer,
         transforms: [cellWidth(20)],
       },
@@ -213,7 +212,6 @@ export const UserIdentityProviderLinks = ({
       },
       {
         name: "",
-        cellFormatters: [emptyFormatter()],
         cellRenderer: unlinkRenderer,
         transforms: [cellWidth(20)],
       },
@@ -223,7 +221,6 @@ export const UserIdentityProviderLinks = ({
       columns.splice(1, 0, {
         name: "type",
         displayKey: "type",
-        cellFormatters: [emptyFormatter()],
         cellRenderer: badgeRenderer1,
         transforms: [cellWidth(10)],
       });
@@ -286,13 +283,11 @@ export const UserIdentityProviderLinks = ({
                 {
                   name: "type",
                   displayKey: "type",
-                  cellFormatters: [emptyFormatter()],
                   cellRenderer: badgeRenderer2,
                   transforms: [cellWidth(60)],
                 },
                 {
                   name: "",
-                  cellFormatters: [emptyFormatter()],
                   cellRenderer: linkRenderer,
                 },
               ]}

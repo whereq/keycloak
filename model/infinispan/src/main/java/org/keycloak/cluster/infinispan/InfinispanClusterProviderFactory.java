@@ -17,11 +17,23 @@
 
 package org.keycloak.cluster.infinispan;
 
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+
 import org.infinispan.Cache;
 import org.infinispan.client.hotrod.exceptions.HotRodClientException;
+import org.infinispan.configuration.cache.CacheMode;
 import org.infinispan.lifecycle.ComponentStatus;
 import org.infinispan.notifications.Listener;
+import org.infinispan.notifications.cachemanagerlistener.annotation.Merged;
 import org.infinispan.notifications.cachemanagerlistener.annotation.ViewChanged;
+import org.infinispan.notifications.cachemanagerlistener.event.MergeEvent;
 import org.infinispan.notifications.cachemanagerlistener.event.ViewChangedEvent;
 import org.infinispan.persistence.remote.RemoteStore;
 import org.infinispan.remoting.transport.Address;
@@ -35,31 +47,22 @@ import org.keycloak.connections.infinispan.DefaultInfinispanConnectionProviderFa
 import org.keycloak.connections.infinispan.InfinispanConnectionProvider;
 import org.keycloak.connections.infinispan.InfinispanUtil;
 import org.keycloak.connections.infinispan.TopologyInfo;
+import org.keycloak.infinispan.util.InfinispanUtils;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.KeycloakSessionFactory;
-
-import java.io.Serializable;
-import java.util.Collection;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
+import org.keycloak.provider.EnvironmentDependentProviderFactory;
 
 /**
  * This impl is aware of Cross-Data-Center scenario too
  *
  * @author <a href="mailto:mposolda@redhat.com">Marek Posolda</a>
  */
-public class InfinispanClusterProviderFactory implements ClusterProviderFactory {
-
-    public static final String PROVIDER_ID = "infinispan";
+public class InfinispanClusterProviderFactory implements ClusterProviderFactory, EnvironmentDependentProviderFactory {
 
     protected static final Logger logger = Logger.getLogger(InfinispanClusterProviderFactory.class);
 
     // Infinispan cache
-    private volatile Cache<String, Serializable> workCache;
+    private volatile Cache<String, Object> workCache;
 
     // Ensure that atomic operations (like putIfAbsent) must work correctly in any of: non-clustered, clustered or cross-Data-Center (cross-DC) setups
     private CrossDCAwareCacheFactory crossDCAwareCacheFactory;
@@ -134,7 +137,7 @@ public class InfinispanClusterProviderFactory implements ClusterProviderFactory 
 
     // Will retry few times for the case when backup site not available in cross-dc environment.
     // The site might be taken offline automatically if "take-offline" properly configured
-    static <V extends Serializable> V putIfAbsentWithRetries(CrossDCAwareCacheFactory crossDCAwareCacheFactory, String key, V value, int taskTimeoutInSeconds) {
+    static <V> V putIfAbsentWithRetries(CrossDCAwareCacheFactory crossDCAwareCacheFactory, String key, V value, int taskTimeoutInSeconds) {
         AtomicReference<V> resultRef = new AtomicReference<>();
 
         Retry.executeWithBackoff(iteration -> {
@@ -185,11 +188,29 @@ public class InfinispanClusterProviderFactory implements ClusterProviderFactory 
 
     @Override
     public String getId() {
-        return PROVIDER_ID;
+        return InfinispanUtils.EMBEDDED_PROVIDER_ID;
+    }
+
+    @Override
+    public boolean isSupported(Config.Scope config) {
+        return InfinispanUtils.isEmbeddedInfinispan();
     }
 
     @Listener
     public class ViewChangeListener {
+
+        @Merged
+        public void mergeEvent(MergeEvent event) {
+           // During split-brain only Keycloak instances contained within the same partition will receive updates via
+           // the work cache. On split-brain heal it's necessary for us to clear all local caches so that potentially
+           // stale values are invalidated and subsequent requests are forced to read from the DB.
+           localExecutor.execute(() ->
+              Arrays.stream(InfinispanConnectionProvider.LOCAL_CACHE_NAMES)
+                    .map(name -> workCache.getCacheManager().getCache(name))
+                    .filter(cache -> cache.getCacheConfiguration().clustering().cacheMode() == CacheMode.LOCAL)
+                    .forEach(Cache::clear)
+           );
+        }
 
         @ViewChanged
         public void viewChanged(ViewChangedEvent event) {

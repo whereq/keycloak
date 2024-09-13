@@ -90,6 +90,9 @@ public class AuthenticationProcessor {
     public static final String BROKER_USER_ID = "broker.user.id";
     public static final String FORWARDED_PASSIVE_LOGIN = "forwarded.passive.login";
 
+    // Boolean flag, which is true when authentication-selector screen should be rendered (typically displayed when user clicked on 'try another way' link)
+    public static final String AUTHENTICATION_SELECTOR_SCREEN_DISPLAYED = "auth.selector.screen.rendered";
+
     protected static final Logger logger = Logger.getLogger(AuthenticationProcessor.class);
     protected RealmModel realm;
     protected UserSessionModel userSession;
@@ -429,7 +432,7 @@ public class AuthenticationProcessor {
             this.challenge = challenge;
 
         }
-        
+
         @Override
         public void failure(AuthenticationFlowError error, Response challenge, String eventDetails, String userErrorMessage) {
             this.error = error;
@@ -717,7 +720,7 @@ public class AuthenticationProcessor {
         if (realm.isBruteForceProtected()) {
             UserModel user = AuthenticationManager.lookupUserForBruteForceLog(session, realm, authenticationSession);
             if (user != null) {
-                getBruteForceProtector().failedLogin(realm, user, connection);
+                getBruteForceProtector().failedLogin(realm, user, connection, session.getContext().getHttpRequest().getUri());
             }
         }
     }
@@ -1164,10 +1167,10 @@ public class AuthenticationProcessor {
         if (!authenticatedUser.isEnabled()) throw new AuthenticationFlowException(AuthenticationFlowError.USER_DISABLED);
         if (authenticatedUser.getServiceAccountClientLink() != null) throw new AuthenticationFlowException(AuthenticationFlowError.UNKNOWN_USER);
     }
-    
+
     protected Response authenticationComplete() {
         // attachSession(); // Session will be attached after requiredActions + consents are finished.
-        AuthenticationManager.setClientScopesInSession(authenticationSession);
+        AuthenticationManager.setClientScopesInSession(session, authenticationSession);
 
         String nextRequiredAction = nextRequiredAction();
         if (nextRequiredAction != null) {

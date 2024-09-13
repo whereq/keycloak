@@ -28,16 +28,18 @@ import org.keycloak.operator.Constants;
 import org.keycloak.operator.crds.v2alpha1.deployment.Keycloak;
 import org.keycloak.operator.crds.v2alpha1.deployment.KeycloakStatusAggregator;
 import org.keycloak.operator.crds.v2alpha1.deployment.ValueOrSecret;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.BootstrapAdminSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.DatabaseSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HostnameSpec;
-import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpManagementSpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.ProxySpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TransactionsSpec;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -72,6 +74,7 @@ public class KeycloakDistConfigurator {
         configureCache();
         configureProxy();
         configureManagement();
+        configureBootstrapAdmin();
     }
 
     /**
@@ -84,6 +87,26 @@ public class KeycloakDistConfigurator {
     }
 
     /* ---------- Configuration of first-class citizen fields ---------- */
+
+    void configureBootstrapAdmin() {
+        optionMapper(Function.identity())
+                .mapOption("bootstrap-admin-username",
+                        keycloakCR -> Optional.ofNullable(keycloakCR.getSpec().getBootstrapAdminSpec())
+                                .map(BootstrapAdminSpec::getUser).map(BootstrapAdminSpec.User::getSecret)
+                                .or(() -> Optional.of(KeycloakAdminSecretDependentResource.getName(keycloakCR)))
+                                .map(s -> new SecretKeySelector("username", s, null)).orElse(null))
+                .mapOption("bootstrap-admin-password",
+                        keycloakCR -> Optional.ofNullable(keycloakCR.getSpec().getBootstrapAdminSpec())
+                                .map(BootstrapAdminSpec::getUser).map(BootstrapAdminSpec.User::getSecret)
+                                .or(() -> Optional.of(KeycloakAdminSecretDependentResource.getName(keycloakCR)))
+                                .map(s -> new SecretKeySelector("password", s, null)).orElse(null));
+
+        optionMapper(keycloakCR -> keycloakCR.getSpec().getBootstrapAdminSpec())
+                .mapOption("bootstrap-admin-client-id",
+                        spec -> Optional.ofNullable(spec.getService()).map(BootstrapAdminSpec.Service::getSecret).map(s -> new SecretKeySelector("client-id", s, null)).orElse(null))
+                .mapOption("bootstrap-admin-client-secret",
+                        spec -> Optional.ofNullable(spec.getService()).map(BootstrapAdminSpec.Service::getSecret).map(s -> new SecretKeySelector("client-secret", s, null)).orElse(null));
+    }
 
     void configureHostname() {
         optionMapper(keycloakCR -> keycloakCR.getSpec().getHostnameSpec())
@@ -158,12 +181,12 @@ public class KeycloakDistConfigurator {
                 .getAdditionalOptions()
                 .stream()
                 .map(ValueOrSecret::getName)
-                .collect(Collectors.toSet());
+                .collect(Collectors.toCollection(HashSet::new));
 
-        final var sameItems = CollectionUtil.intersection(serverConfigNames, firstClassConfigOptions.keySet());
-        if (CollectionUtil.isNotEmpty(sameItems)) {
+        serverConfigNames.retainAll(firstClassConfigOptions.keySet());
+        if (CollectionUtil.isNotEmpty(serverConfigNames)) {
             status.addWarningMessage("You need to specify these fields as the first-class citizen of the CR: "
-                    + CollectionUtil.join(sameItems, ","));
+                    + CollectionUtil.join(serverConfigNames, ","));
         }
     }
 

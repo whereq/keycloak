@@ -1,8 +1,9 @@
 import {
-  AccountEnvironment,
-  KeycloakContext,
+  BaseEnvironment,
+  type KeycloakContext,
 } from "@keycloak/keycloak-ui-shared";
-import { BaseEnvironment } from "@keycloak/keycloak-ui-shared/dist/context/environment";
+
+import OrganizationRepresentation from "@keycloak/keycloak-admin-client/lib/defs/organizationRepresentation";
 import { joinPath } from "../utils/joinPath";
 import { parseResponse } from "./parse-response";
 import {
@@ -45,7 +46,7 @@ export async function getSupportedLocales({
 }
 
 export async function savePersonalInfo(
-  context: KeycloakContext<AccountEnvironment>,
+  context: KeycloakContext<BaseEnvironment>,
   info: UserRepresentation,
 ): Promise<void> {
   const response = await request("/", context, { body: info, method: "POST" });
@@ -134,7 +135,7 @@ export async function linkAccount(
 ) {
   const redirectUri = encodeURIComponent(
     joinPath(
-      context.environment.authUrl,
+      context.environment.serverBaseUrl,
       "realms",
       context.environment.realm,
       "account",
@@ -155,4 +156,9 @@ export async function getGroups({ signal, context }: CallOptions) {
     signal,
   });
   return parseResponse<Group[]>(response);
+}
+
+export async function getUserOrganizations({ signal, context }: CallOptions) {
+  const response = await request("/organizations", context, { signal });
+  return parseResponse<OrganizationRepresentation[]>(response);
 }

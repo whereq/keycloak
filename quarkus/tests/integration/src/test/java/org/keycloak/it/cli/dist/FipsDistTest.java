@@ -33,6 +33,8 @@ import io.quarkus.test.junit.main.LaunchResult;
 @RawDistOnly(reason = "Containers are immutable")
 public class FipsDistTest {
 
+    private static final String BCFIPS_VERSION = "BCFIPS version 1.000205";
+
     @Test
     void testFipsNonApprovedMode(KeycloakDistribution dist) {
         runOnFipsEnabledDistribution(dist, () -> {
@@ -41,27 +43,25 @@ public class FipsDistTest {
             // Not shown as FIPS is not a preview anymore
             cliResult.assertMessageWasShownExactlyNumberOfTimes("Preview features enabled: fips:v1", 0);
             cliResult.assertMessage("Java security providers: [ \n"
-                    + " KC(BCFIPS version 1.000203, FIPS-JVM: " + KeycloakFipsSecurityProvider.isSystemFipsEnabled() + ") version 1.0 - class org.keycloak.crypto.fips.KeycloakFipsSecurityProvider");
+                    + " KC(" + BCFIPS_VERSION + ", FIPS-JVM: " + KeycloakFipsSecurityProvider.isSystemFipsEnabled() + ") version 1.0 - class org.keycloak.crypto.fips.KeycloakFipsSecurityProvider");
         });
     }
 
     @Test
     void testFipsApprovedMode(KeycloakDistribution dist) {
         runOnFipsEnabledDistribution(dist, () -> {
-            dist.setEnvVar("KEYCLOAK_ADMIN", "admin");
-            dist.setEnvVar("KEYCLOAK_ADMIN_PASSWORD", "admin");
+            dist.setEnvVar("KC_BOOTSTRAP_ADMIN_USERNAME", "admin");
+            dist.setEnvVar("KC_BOOTSTRAP_ADMIN_PASSWORD", "admin");
 
             CLIResult cliResult = dist.run("start", "--fips-mode=strict");
-            cliResult.assertStarted();
-            cliResult.assertMessage(
-                    "org.bouncycastle.crypto.fips.FipsUnapprovedOperationError: password must be at least 112 bits");
+            cliResult.assertMessage("password must be at least 112 bits");
             cliResult.assertMessage("Java security providers: [ \n"
-                    + " KC(BCFIPS version 1.000203 Approved Mode, FIPS-JVM: " + KeycloakFipsSecurityProvider.isSystemFipsEnabled() + ") version 1.0 - class org.keycloak.crypto.fips.KeycloakFipsSecurityProvider");
-
-            dist.setEnvVar("KEYCLOAK_ADMIN_PASSWORD", "adminadminadmin");
+                    + " KC(" + BCFIPS_VERSION + " Approved Mode, FIPS-JVM: " + KeycloakFipsSecurityProvider.isSystemFipsEnabled() + ") version 1.0 - class org.keycloak.crypto.fips.KeycloakFipsSecurityProvider");
+            
+            dist.setEnvVar("KC_BOOTSTRAP_ADMIN_PASSWORD", "adminadminadmin");
             cliResult = dist.run("start", "--fips-mode=strict");
             cliResult.assertStarted();
-            cliResult.assertMessage("Added user 'admin' to realm 'master'");
+            cliResult.assertMessage("Created temporary admin user with username admin");
         });
     }
 
@@ -147,8 +147,18 @@ public class FipsDistTest {
             RawKeycloakDistribution rawDist = dist.unwrap(RawKeycloakDistribution.class);
             Path truststorePath = rawDist.getDistPath().resolve("conf").resolve("server.keystore").toAbsolutePath();
 
-            // https-trust-store-type should be automatically set to pkcs12 in fips-mode=non-strict
             CLIResult cliResult = dist.run("--verbose", "start", "--fips-mode=non-strict", "--https-key-store-password=passwordpassword",
+                    "--https-trust-store-file=" + truststorePath, "--https-trust-store-password=passwordpassword");
+            cliResult.assertError("Unable to determine 'https-trust-store-type' automatically. Adjust the file extension or specify the property.");
+
+            dist.stop();
+
+            dist.copyOrReplaceFileFromClasspath("/server.keystore.pkcs12", Path.of("conf", "server.p12"));
+
+            rawDist = dist.unwrap(RawKeycloakDistribution.class);
+            truststorePath = rawDist.getDistPath().resolve("conf").resolve("server.p12").toAbsolutePath();
+
+            cliResult = dist.run("--verbose", "start", "--fips-mode=non-strict", "--https-key-store-password=passwordpassword",
                     "--https-trust-store-file=" + truststorePath, "--https-trust-store-password=passwordpassword");
             cliResult.assertStarted();
         });

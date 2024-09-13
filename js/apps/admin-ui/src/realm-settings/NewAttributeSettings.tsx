@@ -2,7 +2,7 @@ import type {
   UserProfileAttribute,
   UserProfileConfig,
 } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
-import { ScrollForm } from "@keycloak/keycloak-ui-shared";
+import { ScrollForm, useAlerts, useFetch } from "@keycloak/keycloak-ui-shared";
 import {
   AlertVariant,
   Button,
@@ -15,12 +15,11 @@ import { FormProvider, useForm, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
 import { FixedButtonsGroup } from "../components/form/FixedButtonGroup";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
+import { i18n } from "../i18n/i18n";
 import { convertToFormValues } from "../util";
-import { useFetch } from "../utils/useFetch";
 import useLocale from "../utils/useLocale";
 import { useParams } from "../utils/useParams";
 import "./realm-settings-section.css";
@@ -294,7 +293,7 @@ export default function NewAttributeSettings() {
               },
               translation.value,
             );
-          } catch (error) {
+          } catch {
             console.error(`Error saving translation for ${translation.locale}`);
           }
         },
@@ -378,7 +377,7 @@ export default function NewAttributeSettings() {
         (translation) => translation.value.trim() !== "",
       );
 
-      if (!hasNonEmptyTranslations) {
+      if (!hasNonEmptyTranslations && !formFields.displayName) {
         addError("createAttributeError", t("translationError"));
         return;
       }
@@ -394,6 +393,7 @@ export default function NewAttributeSettings() {
       });
 
       await saveTranslations();
+      i18n.reloadResources();
       navigate(toUserProfile({ realm: realmName, tab: "attributes" }));
 
       addAlert(t("createAttributeSuccess"), AlertVariant.success);

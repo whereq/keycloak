@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
 import static org.keycloak.quarkus.runtime.Environment.isParsedCommand;
 import static org.keycloak.quarkus.runtime.Environment.isRebuild;
 import static org.keycloak.quarkus.runtime.Environment.isRebuildCheck;
+import static org.keycloak.quarkus.runtime.configuration.KeycloakConfigSourceProvider.isKeyStoreConfigSource;
 
 public final class PropertyMappers {
 
@@ -47,7 +48,6 @@ public final class PropertyMappers {
         MAPPERS.addAll(CachingPropertyMappers.getClusteringPropertyMappers());
         MAPPERS.addAll(DatabasePropertyMappers.getDatabasePropertyMappers());
         MAPPERS.addAll(HostnameV2PropertyMappers.getHostnamePropertyMappers());
-        MAPPERS.addAll(HostnameV1PropertyMappers.getHostnamePropertyMappers());
         MAPPERS.addAll(HttpPropertyMappers.getHttpPropertyMappers());
         MAPPERS.addAll(HealthPropertyMappers.getHealthPropertyMappers());
         MAPPERS.addAll(ConfigKeystorePropertyMappers.getConfigKeystorePropertyMappers());
@@ -57,12 +57,14 @@ public final class PropertyMappers {
         MAPPERS.addAll(VaultPropertyMappers.getVaultPropertyMappers());
         MAPPERS.addAll(FeaturePropertyMappers.getMappers());
         MAPPERS.addAll(LoggingPropertyMappers.getMappers());
+        MAPPERS.addAll(TracingPropertyMappers.getMappers());
         MAPPERS.addAll(TransactionPropertyMappers.getTransactionPropertyMappers());
         MAPPERS.addAll(ClassLoaderPropertyMappers.getMappers());
         MAPPERS.addAll(SecurityPropertyMappers.getMappers());
         MAPPERS.addAll(ExportPropertyMappers.getMappers());
         MAPPERS.addAll(ImportPropertyMappers.getMappers());
         MAPPERS.addAll(TruststorePropertyMappers.getMappers());
+        MAPPERS.addAll(BootstrapAdminPropertyMappers.getMappers());
     }
 
     public static ConfigValue getValue(ConfigSourceInterceptorContext context, String name) {
@@ -82,7 +84,7 @@ public final class PropertyMappers {
                 && !ConfigArgsConfigSource.CLI_ARGS.equals(name)
                 && !"kc.home.dir".equals(name)
                 && !"kc.config.file".equals(name)
-                && !Environment.PROFILE.equals(name)
+                && !org.keycloak.common.util.Environment.PROFILE.equals(name)
                 && !"kc.show.config".equals(name)
                 && !"kc.show.config.runtime".equals(name)
                 && !"kc.config-file".equals(name);
@@ -125,11 +127,15 @@ public final class PropertyMappers {
         MAPPERS.sanitizeDisabledMappers();
     }
 
-    public static String formatValue(String property, String value) {
+    public static String maskValue(String property, String value) {
+        return maskValue(property, value, null);
+    }
+
+    public static String maskValue(String property, String value, String configSourceName) {
         property = removeProfilePrefixIfNeeded(property);
         PropertyMapper<?> mapper = getMapper(property);
 
-        if (mapper != null && mapper.isMask()) {
+        if ((configSourceName != null && isKeyStoreConfigSource(configSourceName) || (mapper != null && mapper.isMask()))) {
             return VALUE_MASK;
         }
 

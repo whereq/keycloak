@@ -92,10 +92,8 @@ import org.keycloak.models.UserSessionModel;
 import org.keycloak.models.utils.KeycloakModelUtils;
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.models.utils.RepresentationToModel;
-import org.keycloak.partialimport.ErrorResponseException;
 import org.keycloak.partialimport.PartialImportResult;
 import org.keycloak.partialimport.PartialImportResults;
-import org.keycloak.provider.InvalidationHandler;
 import org.keycloak.representations.adapters.action.GlobalRequestResult;
 import org.keycloak.representations.idm.AdminEventRepresentation;
 import org.keycloak.representations.idm.ClientRepresentation;
@@ -390,12 +388,6 @@ public class RealmAdminResource {
                 rep.setRegistrationEmailAsUsername(realm.isRegistrationEmailAsUsername());
             }
 
-            if (auth.realm().canViewIdentityProviders()) {
-                RealmRepresentation r = ModelToRepresentation.toRepresentation(session, realm, false);
-                rep.setIdentityProviders(r.getIdentityProviders());
-                rep.setIdentityProviderMappers(r.getIdentityProviderMappers());
-            }
-
             return rep;
         }
     }
@@ -446,7 +438,12 @@ public class RealmAdminResource {
                 }
             }
 
-            boolean wasDuplicateEmailsAllowed = realm.isDuplicateEmailsAllowed();
+            if (rep.getAccessCodeLifespanLogin() != null && rep.getAccessCodeLifespanUserAction() != null) {
+                if (rep.getAccessCodeLifespanLogin() < 1 || rep.getAccessCodeLifespanUserAction() < 1) {
+                    throw ErrorResponse.error("AccessCodeLifespanLogin or AccessCodeLifespanUserAction cannot be 0", Status.BAD_REQUEST);
+                }
+            }
+
             RepresentationToModel.updateRealm(rep, realm, session);
 
             // Refresh periodic sync tasks for configured federationProviders
@@ -457,10 +454,6 @@ public class RealmAdminResource {
 
             adminEvent.operation(OperationType.UPDATE).representation(rep).success();
 
-            if (rep.isDuplicateEmailsAllowed() != null && rep.isDuplicateEmailsAllowed() != wasDuplicateEmailsAllowed) {
-                session.invalidate(InvalidationHandler.ObjectType.REALM, realm.getId());
-            }
-
             return Response.noContent().build();
         } catch (ModelDuplicateException e) {
             throw ErrorResponse.exists("Realm with same name exists");
@@ -469,6 +462,8 @@ public class RealmAdminResource {
             throw ErrorResponse.error(e.getMessage(), Status.INTERNAL_SERVER_ERROR);
         } catch (ModelException e) {
             throw ErrorResponse.error(e.getMessage(), Status.BAD_REQUEST);
+        } catch (org.keycloak.services.ErrorResponseException e) {
+            throw e;
         } catch (Exception e) {
             logger.error(e.getMessage(), e);
             throw ErrorResponse.error("Failed to update realm", Response.Status.INTERNAL_SERVER_ERROR);
@@ -1115,7 +1110,7 @@ public class RealmAdminResource {
         auth.realm().requireManageRealm();
         try {
             return Response.ok(
-                    KeycloakModelUtils.runJobInTransactionWithResult(session.getKeycloakSessionFactory(), kcSession -> {
+                    KeycloakModelUtils.runJobInTransactionWithResult(session.getKeycloakSessionFactory(), session.getContext(), kcSession -> {
                         RealmModel realmClone = kcSession.realms().getRealm(realm.getId());
                         AdminEventBuilder adminEventClone = adminEvent.clone(kcSession);
                         // calling a static method to avoid using the wrong instances
@@ -1124,10 +1119,6 @@ public class RealmAdminResource {
             ).build();
         } catch (ModelDuplicateException e) {
             throw ErrorResponse.exists(e.getLocalizedMessage());
-        } catch (ErrorResponseException error) {
-            return error.getResponse();
-        } catch (Exception e) {
-            throw ErrorResponse.error(e.getMessage(), Response.Status.INTERNAL_SERVER_ERROR);
         }
     }
 
@@ -1186,7 +1177,7 @@ public class RealmAdminResource {
         // service accounts are exported if the clients are exported
         // this means that if clients is true but groups/roles is false the service account is exported without roles
         // the other option is just include service accounts if clientsExported && groupsAndRolesExported
-        ExportOptions options = new ExportOptions(false, clientsExported, groupsAndRolesExported, clientsExported);
+        ExportOptions options = new ExportOptions(false, clientsExported, groupsAndRolesExported, clientsExported, true);
 
         ExportImportManager exportProvider = session.getProvider(DatastoreProvider.class).getExportImportManager();
 

@@ -217,7 +217,11 @@ public abstract class AbstractBaseBrokerTest extends AbstractKeycloakTest {
     }
 
     protected void logInAsUserInIDP() {
-        oauth.clientId("broker-app");
+        logInAsUserInIDP("broker-app");
+    }
+
+    protected void logInAsUserInIDP(String clientId) {
+        oauth.clientId(clientId);
         loginPage.open(bc.consumerRealmName());
         logInWithBroker(bc);
     }
@@ -342,7 +346,7 @@ public abstract class AbstractBaseBrokerTest extends AbstractKeycloakTest {
                     .clientId(clientId)
                     .initiatingIdp(initiatingIdp);
 
-            if (clientId != null || idTokenHint != null) {
+            if (redirectUri != null && (clientId != null || idTokenHint != null)) {
                 builder.postLogoutRedirectUri(encodeUrl(redirectUri));
             }
 

@@ -1,4 +1,5 @@
 import type ClientScopeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientScopeRepresentation";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import {
   AlertVariant,
   Button,
@@ -22,7 +23,6 @@ import {
   nameFilter,
   typeFilter,
 } from "../../client-scopes/details/SearchFilter";
-import { useAlerts } from "../../components/alert/Alerts";
 import {
   AllClientScopeType,
   AllClientScopes,
@@ -33,13 +33,11 @@ import {
   removeClientScope,
 } from "../../components/client-scope/ClientScopeTypes";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../../components/table-toolbar/KeycloakDataTable";
+import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
+import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { useAccess } from "../../context/access/Access";
 import { useRealm } from "../../context/realm-context/RealmContext";
+import { translationFormatter } from "../../utils/translationFormatter";
 import useLocaleSort, { mapByKey } from "../../utils/useLocaleSort";
 import { toDedicatedScope } from "../routes/DedicatedScopeDetails";
 import { AddScopeDialog } from "./AddScopeDialog";
@@ -297,6 +295,7 @@ export const ClientScopes = ({
                 </ToolbarItem>
                 <ToolbarItem>
                   <Dropdown
+                    onOpenChange={(isOpen) => setKebabOpen(isOpen)}
                     toggle={(ref) => (
                       <MenuToggle
                         data-testid="kebab"
@@ -368,7 +367,7 @@ export const ClientScopes = ({
               <TypeSelector clientId={clientId} refresh={refresh} {...row} />
             ),
           },
-          { name: "description" },
+          { name: "description", cellFormatters: [translationFormatter(t)] },
         ]}
         actions={
           isManager

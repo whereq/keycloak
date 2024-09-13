@@ -17,6 +17,7 @@
 
 package org.keycloak.organization.admin.resource;
 
+import java.util.List;
 import java.util.stream.Stream;
 
 import jakarta.ws.rs.Consumes;
@@ -48,6 +49,9 @@ import org.keycloak.models.UserModel;
 
 import org.keycloak.models.utils.ModelToRepresentation;
 import org.keycloak.organization.OrganizationProvider;
+import org.keycloak.organization.utils.Organizations;
+import org.keycloak.representations.idm.MemberRepresentation;
+import org.keycloak.representations.idm.MembershipType;
 import org.keycloak.representations.idm.OrganizationRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import org.keycloak.services.ErrorResponse;
@@ -131,7 +135,7 @@ public class OrganizationMemberResource {
     @NoCache
     @Tag(name = KeycloakOpenAPI.Admin.Tags.ORGANIZATIONS)
     @Operation( summary = "Returns a paginated list of organization members filtered according to the specified parameters")
-    public Stream<UserRepresentation> search(
+    public Stream<MemberRepresentation> search(
             @Parameter(description = "A String representing either a member's username, e-mail, first name, or last name.") @QueryParam("search") String search,
             @Parameter(description = "Boolean which defines whether the param 'search' must match exactly or not") @QueryParam("exact") Boolean exact,
             @Parameter(description = "The position of the first result to be processed (pagination offset)") @QueryParam("first") @DefaultValue("0") Integer first,
@@ -148,7 +152,7 @@ public class OrganizationMemberResource {
     @Operation( summary = "Returns the member of the organization with the specified id", description = "Searches for a" +
             "user with the given id. If one is found, and is currently a member of the organization, returns it. Otherwise," +
             "an error response with status NOT_FOUND is returned")
-    public UserRepresentation get(@PathParam("id") String id) {
+    public MemberRepresentation get(@PathParam("id") String id) {
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
@@ -160,8 +164,8 @@ public class OrganizationMemberResource {
     @DELETE
     @Tag(name = KeycloakOpenAPI.Admin.Tags.ORGANIZATIONS)
     @Operation(summary = "Removes the user with the specified id from the organization", description = "Breaks the association " +
-            "between the user and organization. The user itself is not deleted. If no user is found, or if they are not " +
-            "a member of the organization, an error response is returned")
+            "between the user and organization. The user itself is deleted in case the membership is managed, otherwise the user is not deleted. " +
+            "If no user is found, or if they are not a member of the organization, an error response is returned")
     public Response delete(@PathParam("id") String id) {
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
@@ -176,29 +180,30 @@ public class OrganizationMemberResource {
         throw ErrorResponse.error("Not a member of the organization", Status.BAD_REQUEST);
     }
 
-    @Path("{id}/organization")
+    @Path("{id}/organizations")
     @GET
     @Produces(MediaType.APPLICATION_JSON)
     @NoCache
     @Tag(name = KeycloakOpenAPI.Admin.Tags.ORGANIZATIONS)
-    @Operation(summary = "Returns the organization associated with the user that has the specified id")
-    public OrganizationRepresentation getOrganization(@PathParam("id") String id) {
+    @Operation(summary = "Returns the organizations associated with the user that has the specified id")
+    public Stream<OrganizationRepresentation> getOrganizations(@PathParam("id") String id) {
         if (StringUtil.isBlank(id)) {
             throw ErrorResponse.error("id cannot be null", Status.BAD_REQUEST);
         }
 
-        UserModel member = getMember(id);
-        OrganizationModel organization = provider.getByMember(member);
+        UserModel member = getUser(id);
 
-        if (organization == null) {
-            throw ErrorResponse.error("Not associated with an organization", Status.NOT_FOUND);
-        }
+        return provider.getByMember(member).map(Organizations::toRepresentation);
+    }
 
-        OrganizationRepresentation rep = new OrganizationRepresentation();
-
-        rep.setId(organization.getId());
-
-        return rep;
+    @Path("count")
+    @GET
+    @Produces(MediaType.APPLICATION_JSON)
+    @NoCache
+    @Tag(name = KeycloakOpenAPI.Admin.Tags.ORGANIZATIONS)
+    @Operation( summary = "Returns number of members in the organization.")
+    public Long count() {
+        return provider.getMembersCount(organization);
     }
 
     private UserModel getMember(String id) {
@@ -211,7 +216,19 @@ public class OrganizationMemberResource {
         return member;
     }
 
-    private UserRepresentation toRepresentation(UserModel member) {
-        return ModelToRepresentation.toRepresentation(session, realm, member);
+    private UserModel getUser(String id) {
+        UserModel user = session.users().getUserById(realm, id);
+
+        if (user == null) {
+            throw new NotFoundException();
+        }
+
+        return user;
+    }
+
+    private MemberRepresentation toRepresentation(UserModel member) {
+        MemberRepresentation result = new MemberRepresentation(ModelToRepresentation.toRepresentation(session, realm, member));
+        result.setMembershipType(provider.isManagedMember(organization, member) ? MembershipType.MANAGED : MembershipType.UNMANAGED);
+        return result;
     }
 }

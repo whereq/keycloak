@@ -33,7 +33,6 @@ import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.provider.Provider;
-import org.keycloak.representations.dpop.DPoP;
 import org.keycloak.services.cors.Cors;
 
 /**
@@ -72,10 +71,9 @@ public interface OAuth2GrantType extends Provider {
         protected EventBuilder event;
         protected Cors cors;
         protected Object tokenManager;
-        protected DPoP dPoP;
 
         public Context(KeycloakSession session, Object clientConfig, Map<String, String> clientAuthAttributes,
-                MultivaluedMap<String, String> formParams, EventBuilder event, Cors cors, Object tokenManager, DPoP dPoP) {
+                MultivaluedMap<String, String> formParams, EventBuilder event, Cors cors, Object tokenManager) {
             this.session = session;
             this.realm = session.getContext().getRealm();
             this.client = session.getContext().getClient();
@@ -89,7 +87,6 @@ public interface OAuth2GrantType extends Provider {
             this.event = event;
             this.cors = cors;
             this.tokenManager = tokenManager;
-            this.dPoP = dPoP;
         }
 
         public Context(Context context) {
@@ -106,7 +103,6 @@ public interface OAuth2GrantType extends Provider {
             this.event = context.event;
             this.cors = context.cors;
             this.tokenManager = context.tokenManager;
-            this.dPoP = context.dPoP;
         }
 
         public void setFormParams(MultivaluedHashMap<String, String> formParams) {
@@ -125,6 +121,57 @@ public interface OAuth2GrantType extends Provider {
             this.clientAuthAttributes = clientAuthAttributes;
         }
 
+        public ClientModel getClient() {
+            return client;
+        }
+
+        public Map<String, String> getClientAuthAttributes() {
+            return clientAuthAttributes;
+        }
+
+        public Object getClientConfig() {
+            return clientConfig;
+        }
+
+        public ClientConnection getClientConnection() {
+            return clientConnection;
+        }
+
+        public Cors getCors() {
+            return cors;
+        }
+
+        public EventBuilder getEvent() {
+            return event;
+        }
+
+        public MultivaluedMap<String, String> getFormParams() {
+            return formParams;
+        }
+
+        public HttpHeaders getHeaders() {
+            return headers;
+        }
+
+        public RealmModel getRealm() {
+            return realm;
+        }
+
+        public HttpRequest getRequest() {
+            return request;
+        }
+
+        public HttpResponse getResponse() {
+            return response;
+        }
+
+        public KeycloakSession getSession() {
+            return session;
+        }
+
+        public Object getTokenManager() {
+            return tokenManager;
+        }
     }
 
 }

@@ -49,6 +49,7 @@ import org.keycloak.services.clientpolicy.context.PreAuthorizationRequestContext
 import org.keycloak.services.messages.Messages;
 import org.keycloak.services.resources.LoginActionsService;
 import org.keycloak.services.util.CacheControlUtil;
+import org.keycloak.services.util.LocaleUtil;
 import org.keycloak.sessions.AuthenticationSessionModel;
 import org.keycloak.util.TokenUtil;
 
@@ -268,6 +269,8 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
     }
 
     private Response redirectErrorToClient(OIDCResponseMode responseMode, String error, String errorDescription) {
+        CacheControlUtil.noBackButtonCacheControlHeader(session);
+
         OIDCRedirectUriBuilder errorResponseBuilder = OIDCRedirectUriBuilder.fromUri(redirectUri, responseMode, session, null)
                 .addParam(OAuth2Constants.ERROR, error);
 
@@ -349,6 +352,7 @@ public class AuthorizationEndpoint extends AuthorizationEndpointBase {
 
         AuthenticationProcessor processor = createProcessor(authenticationSession, flowId, LoginActionsService.REGISTRATION_PATH);
         authenticationSession.setClientNote(APP_INITIATED_FLOW, LoginActionsService.REGISTRATION_PATH);
+        LocaleUtil.processLocaleParam(session, realm, authenticationSession);
 
         return processor.authenticate();
     }

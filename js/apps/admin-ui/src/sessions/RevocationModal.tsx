@@ -13,7 +13,7 @@ import {
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 
 type RevocationModalProps = {
@@ -28,7 +28,7 @@ export const RevocationModal = ({
   const { adminClient } = useAdminClient();
 
   const { t } = useTranslation();
-  const { addAlert } = useAlerts();
+  const { addAlert, addError } = useAlerts();
 
   const { realm: realmName, realmRepresentation: realm, refresh } = useRealm();
   const { register, handleSubmit } = useForm();
@@ -74,7 +74,7 @@ export const RevocationModal = ({
 
       addAlert(t("notBeforeSuccess"), AlertVariant.success);
     } catch (error) {
-      addAlert(t("setToNowError", { error }), AlertVariant.danger);
+      addError("setToNowError", error);
     }
   };
 
@@ -90,7 +90,7 @@ export const RevocationModal = ({
       addAlert(t("notBeforeClearedSuccess"), AlertVariant.success);
       refresh();
     } catch (error) {
-      addAlert(t("notBeforeError", { error }), AlertVariant.danger);
+      addError("notBeforeError", error);
     }
   };
 

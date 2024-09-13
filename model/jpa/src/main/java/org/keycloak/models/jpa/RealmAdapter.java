@@ -21,9 +21,6 @@ import org.keycloak.Config;
 import org.jboss.logging.Logger;
 import org.keycloak.authentication.RequiredActionFactory;
 import org.keycloak.authentication.RequiredActionProvider;
-import org.keycloak.broker.provider.IdentityProvider;
-import org.keycloak.broker.provider.IdentityProviderFactory;
-import org.keycloak.broker.social.SocialIdentityProvider;
 import org.keycloak.common.enums.SslRequired;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.common.util.Time;
@@ -50,7 +47,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
 
@@ -81,6 +77,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
         this.realm = realm;
     }
 
+    @Override
     public RealmEntity getEntity() {
         return realm;
     }
@@ -229,7 +226,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
     @Override
     public Map<String, String> getAttributes() {
         // should always return a copy
-        Map<String, String> result = new HashMap<String, String>();
+        Map<String, String> result = new HashMap<>();
         for (RealmAttributeEntity attr : realm.getAttributes()) {
             result.put(attr.getName(), attr.getValue());
         }
@@ -1220,157 +1217,32 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     @Override
     public Stream<IdentityProviderModel> getIdentityProvidersStream() {
-        return realm.getIdentityProviders().stream().map(this::entityToModel);
-    }
-
-    private IdentityProviderModel entityToModel(IdentityProviderEntity entity) {
-        IdentityProviderModel identityProviderModel = getModelFromProviderFactory(entity.getProviderId());
-        identityProviderModel.setProviderId(entity.getProviderId());
-        identityProviderModel.setAlias(entity.getAlias());
-        identityProviderModel.setDisplayName(entity.getDisplayName());
-
-        identityProviderModel.setInternalId(entity.getInternalId());
-        Map<String, String> config = entity.getConfig();
-        Map<String, String> copy = new HashMap<>();
-        copy.putAll(config);
-        identityProviderModel.setConfig(copy);
-        identityProviderModel.setEnabled(entity.isEnabled());
-        identityProviderModel.setLinkOnly(entity.isLinkOnly());
-        identityProviderModel.setTrustEmail(entity.isTrustEmail());
-        identityProviderModel.setAuthenticateByDefault(entity.isAuthenticateByDefault());
-        identityProviderModel.setFirstBrokerLoginFlowId(entity.getFirstBrokerLoginFlowId());
-        identityProviderModel.setPostBrokerLoginFlowId(entity.getPostBrokerLoginFlowId());
-        identityProviderModel.setStoreToken(entity.isStoreToken());
-        identityProviderModel.setAddReadTokenRoleOnCreate(entity.isAddReadTokenRoleOnCreate());
-        return identityProviderModel;
-    }
-
-    private IdentityProviderModel getModelFromProviderFactory(String providerId) {
-        Optional<IdentityProviderFactory> factory = Stream.concat(session.getKeycloakSessionFactory().getProviderFactoriesStream(IdentityProvider.class),
-                                                                  session.getKeycloakSessionFactory().getProviderFactoriesStream(SocialIdentityProvider.class))
-                                                          .filter(providerFactory -> Objects.equals(providerFactory.getId(), providerId))
-                                                          .map(IdentityProviderFactory.class::cast)
-                                                          .findFirst();
-
-        if (factory.isPresent()) {
-            return factory.get().createConfig();
-        } else {
-            logger.warn("Couldn't find a suitable identity provider factory for " + providerId);
-            return new IdentityProviderModel();
-        }
+        return session.identityProviders().getAllStream();
     }
 
     @Override
     public IdentityProviderModel getIdentityProviderByAlias(String alias) {
-        return getIdentityProvidersStream()
-                .filter(model -> Objects.equals(model.getAlias(), alias))
-                .findFirst()
-                .orElse(null);
+        return session.identityProviders().getByAlias(alias);
     }
 
     @Override
     public void addIdentityProvider(IdentityProviderModel identityProvider) {
-        IdentityProviderEntity entity = new IdentityProviderEntity();
-
-        if (identityProvider.getInternalId() == null) {
-            entity.setInternalId(KeycloakModelUtils.generateId());
-        } else {
-            entity.setInternalId(identityProvider.getInternalId());
-        }
-        entity.setAlias(identityProvider.getAlias());
-        entity.setDisplayName(identityProvider.getDisplayName());
-        entity.setProviderId(identityProvider.getProviderId());
-        entity.setEnabled(identityProvider.isEnabled());
-        entity.setStoreToken(identityProvider.isStoreToken());
-        entity.setAddReadTokenRoleOnCreate(identityProvider.isAddReadTokenRoleOnCreate());
-        entity.setTrustEmail(identityProvider.isTrustEmail());
-        entity.setAuthenticateByDefault(identityProvider.isAuthenticateByDefault());
-        entity.setFirstBrokerLoginFlowId(identityProvider.getFirstBrokerLoginFlowId());
-        entity.setPostBrokerLoginFlowId(identityProvider.getPostBrokerLoginFlowId());
-        entity.setConfig(identityProvider.getConfig());
-        entity.setLinkOnly(identityProvider.isLinkOnly());
-
-        realm.addIdentityProvider(entity);
-
-        identityProvider.setInternalId(entity.getInternalId());
-
-        em.persist(entity);
-        em.flush();
+        session.identityProviders().create(identityProvider);
     }
 
     @Override
     public void removeIdentityProviderByAlias(String alias) {
-        for (IdentityProviderEntity entity : realm.getIdentityProviders()) {
-            if (entity.getAlias().equals(alias)) {
-
-                IdentityProviderModel model = entityToModel(entity);
-                em.remove(entity);
-                em.flush();
-
-                session.getKeycloakSessionFactory().publish(new RealmModel.IdentityProviderRemovedEvent() {
-
-                    @Override
-                    public RealmModel getRealm() {
-                        return RealmAdapter.this;
-                    }
-
-                    @Override
-                    public IdentityProviderModel getRemovedIdentityProvider() {
-                        return model;
-                    }
-
-                    @Override
-                    public KeycloakSession getKeycloakSession() {
-                        return session;
-                    }
-                });
-
-            }
-        }
+        session.identityProviders().remove(alias);
     }
 
     @Override
     public void updateIdentityProvider(IdentityProviderModel identityProvider) {
-        for (IdentityProviderEntity entity : this.realm.getIdentityProviders()) {
-            if (entity.getInternalId().equals(identityProvider.getInternalId())) {
-                entity.setAlias(identityProvider.getAlias());
-                entity.setDisplayName(identityProvider.getDisplayName());
-                entity.setEnabled(identityProvider.isEnabled());
-                entity.setTrustEmail(identityProvider.isTrustEmail());
-                entity.setAuthenticateByDefault(identityProvider.isAuthenticateByDefault());
-                entity.setFirstBrokerLoginFlowId(identityProvider.getFirstBrokerLoginFlowId());
-                entity.setPostBrokerLoginFlowId(identityProvider.getPostBrokerLoginFlowId());
-                entity.setAddReadTokenRoleOnCreate(identityProvider.isAddReadTokenRoleOnCreate());
-                entity.setStoreToken(identityProvider.isStoreToken());
-                entity.setConfig(identityProvider.getConfig());
-                entity.setLinkOnly(identityProvider.isLinkOnly());
-            }
-        }
-
-        em.flush();
-
-        session.getKeycloakSessionFactory().publish(new RealmModel.IdentityProviderUpdatedEvent() {
-
-            @Override
-            public RealmModel getRealm() {
-                return RealmAdapter.this;
-            }
-
-            @Override
-            public IdentityProviderModel getUpdatedIdentityProvider() {
-                return identityProvider;
-            }
-
-            @Override
-            public KeycloakSession getKeycloakSession() {
-                return session;
-            }
-        });
+        session.identityProviders().update(identityProvider);
     }
 
     @Override
     public boolean isIdentityFederationEnabled() {
-        return !this.realm.getIdentityProviders().isEmpty();
+        return session.identityProviders().isIdentityFederationEnabled();
     }
 
     @Override
@@ -1408,106 +1280,37 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     @Override
     public Stream<IdentityProviderMapperModel> getIdentityProviderMappersStream() {
-        return realm.getIdentityProviderMappers().stream().map(this::entityToModel);
+        return session.identityProviders().getMappersStream();
     }
 
     @Override
     public Stream<IdentityProviderMapperModel> getIdentityProviderMappersByAliasStream(String brokerAlias) {
-        return realm.getIdentityProviderMappers().stream()
-                .filter(e -> Objects.equals(e.getIdentityProviderAlias(), brokerAlias))
-                .map(this::entityToModel);
+        return session.identityProviders().getMappersByAliasStream(brokerAlias);
     }
 
     @Override
     public IdentityProviderMapperModel addIdentityProviderMapper(IdentityProviderMapperModel model) {
-        if (getIdentityProviderMapperByName(model.getIdentityProviderAlias(), model.getName()) != null) {
-            throw new RuntimeException("identity provider mapper name must be unique per identity provider");
-        }
-        String id = KeycloakModelUtils.generateId();
-        IdentityProviderMapperEntity entity = new IdentityProviderMapperEntity();
-        entity.setId(id);
-        entity.setName(model.getName());
-        entity.setIdentityProviderAlias(model.getIdentityProviderAlias());
-        entity.setIdentityProviderMapper(model.getIdentityProviderMapper());
-        entity.setRealm(this.realm);
-        entity.setConfig(model.getConfig());
-
-        em.persist(entity);
-        this.realm.getIdentityProviderMappers().add(entity);
-        return entityToModel(entity);
-    }
-
-    protected IdentityProviderMapperEntity getIdentityProviderMapperEntity(String id) {
-        for (IdentityProviderMapperEntity entity : this.realm.getIdentityProviderMappers()) {
-            if (entity.getId().equals(id)) {
-                return entity;
-            }
-        }
-        return null;
-
-    }
-
-    protected IdentityProviderMapperEntity getIdentityProviderMapperEntityByName(String alias, String name) {
-        for (IdentityProviderMapperEntity entity : this.realm.getIdentityProviderMappers()) {
-            if (entity.getIdentityProviderAlias().equals(alias) && entity.getName().equals(name)) {
-                return entity;
-            }
-        }
-        return null;
-
+        return session.identityProviders().createMapper(model);
     }
 
     @Override
     public void removeIdentityProviderMapper(IdentityProviderMapperModel mapping) {
-        IdentityProviderMapperEntity toDelete = getIdentityProviderMapperEntity(mapping.getId());
-        if (toDelete != null) {
-            this.realm.getIdentityProviderMappers().remove(toDelete);
-            em.remove(toDelete);
-        }
-
+        session.identityProviders().removeMapper(mapping);
     }
 
     @Override
     public void updateIdentityProviderMapper(IdentityProviderMapperModel mapping) {
-        IdentityProviderMapperEntity entity = getIdentityProviderMapperEntity(mapping.getId());
-        entity.setIdentityProviderAlias(mapping.getIdentityProviderAlias());
-        entity.setIdentityProviderMapper(mapping.getIdentityProviderMapper());
-        if (entity.getConfig() == null) {
-            entity.setConfig(mapping.getConfig());
-        } else {
-            entity.getConfig().clear();
-            if (mapping.getConfig() != null) {
-                entity.getConfig().putAll(mapping.getConfig());
-            }
-        }
-        em.flush();
-
+        session.identityProviders().updateMapper(mapping);
     }
 
     @Override
     public IdentityProviderMapperModel getIdentityProviderMapperById(String id) {
-        IdentityProviderMapperEntity entity = getIdentityProviderMapperEntity(id);
-        if (entity == null) return null;
-        return entityToModel(entity);
+        return session.identityProviders().getMapperById(id);
     }
 
     @Override
     public IdentityProviderMapperModel getIdentityProviderMapperByName(String alias, String name) {
-        IdentityProviderMapperEntity entity = getIdentityProviderMapperEntityByName(alias, name);
-        if (entity == null) return null;
-        return entityToModel(entity);
-    }
-
-    protected IdentityProviderMapperModel entityToModel(IdentityProviderMapperEntity entity) {
-        IdentityProviderMapperModel mapping = new IdentityProviderMapperModel();
-        mapping.setId(entity.getId());
-        mapping.setName(entity.getName());
-        mapping.setIdentityProviderAlias(entity.getIdentityProviderAlias());
-        mapping.setIdentityProviderMapper(entity.getIdentityProviderMapper());
-        Map<String, String> config = new HashMap<String, String>();
-        if (entity.getConfig() != null) config.putAll(entity.getConfig());
-        mapping.setConfig(config);
-        return mapping;
+        return session.identityProviders().getMapperByName(alias, name);
     }
 
     @Override
@@ -1637,7 +1440,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     @Override
     public void removeAuthenticationFlow(AuthenticationFlowModel model) {
-        if (KeycloakModelUtils.isFlowUsed(this, model)) {
+        if (KeycloakModelUtils.isFlowUsed(session,this, model)) {
             throw new ModelException("Cannot remove authentication flow, it is currently in use");
         }
         AuthenticationFlowEntity entity = getAuthenticationFlowEntity(model.getId(), true);
@@ -2138,7 +1941,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     /**
      * This just exists for testing purposes
-     * 
+     *
      */
     public static final String COMPONENT_PROVIDER_EXISTS_DISABLED = "component.provider.exists.disabled";
 
@@ -2376,7 +2179,7 @@ public class RealmAdapter implements StorageProviderRealmModel, JpaModel<RealmEn
 
     @Override
     public ClientInitialAccessModel getClientInitialAccessModel(String id) {
-        ClientInitialAccessEntity entity = em.find(ClientInitialAccessEntity.class, id);
+        ClientInitialAccessEntity entity = em.find(ClientInitialAccessEntity.class, id, LockModeType.PESSIMISTIC_WRITE);
         if (entity == null) return null;
         if (!entity.getRealm().getId().equals(realm.getId())) return null;
         return entityToModel(entity);

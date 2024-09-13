@@ -18,6 +18,7 @@
 package org.keycloak.broker.provider.mappersync;
 
 import org.keycloak.models.IdentityProviderMapperModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.provider.ProviderEvent;
 
@@ -29,7 +30,5 @@ import org.keycloak.provider.ProviderEvent;
 public interface ConfigSynchronizer<T extends ProviderEvent> {
     Class<T> getEventClass();
 
-    RealmModel extractRealm(T event);
-
-    void handleEvent(T event, IdentityProviderMapperModel idpMapper);
+    void handleEvent(T event);
 }

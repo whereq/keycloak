@@ -18,6 +18,7 @@
 package org.keycloak.testsuite.federation.kerberos;
 
 import jakarta.mail.internet.MimeMessage;
+import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.client.Entity;
 import jakarta.ws.rs.core.Form;
 import jakarta.ws.rs.core.MultivaluedMap;
@@ -42,6 +43,7 @@ import org.keycloak.federation.kerberos.KerberosConfig;
 import org.keycloak.federation.kerberos.KerberosFederationProviderFactory;
 import org.keycloak.models.Constants;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.credential.PasswordCredentialModel;
 import org.keycloak.representations.idm.ComponentRepresentation;
 import org.keycloak.representations.idm.ErrorRepresentation;
 import org.keycloak.representations.idm.UserProfileAttributeMetadata;
@@ -270,8 +272,27 @@ public class KerberosStandaloneTest extends AbstractKerberosSingleRealmTest {
         driver.navigate().to(changePasswordUrl.trim());
         loginPasswordUpdatePage.assertCurrent();
         loginPasswordUpdatePage.changePassword("resetPassword", "resetPassword");
-        events.expectRequiredAction(EventType.UPDATE_PASSWORD).client(oauth.getClientId()).detail(Details.USERNAME, "test-user@localhost");
+        events.expectRequiredAction(EventType.UPDATE_CREDENTIAL).detail(Details.CREDENTIAL_TYPE, PasswordCredentialModel.TYPE).client(oauth.getClientId()).detail(Details.USERNAME, "test-user@localhost");
+        events.poll();
+        events.expectRequiredAction(EventType.UPDATE_PASSWORD).detail(Details.CREDENTIAL_TYPE, PasswordCredentialModel.TYPE).client(oauth.getClientId()).detail(Details.USERNAME, "test-user@localhost");
         infoPage.assertCurrent();
         Assert.assertEquals("Your account has been updated.", infoPage.getInfo());
+    }
+
+    @Test
+    public void testRemoveUserTest() throws Exception {
+        assertSuccessfulSpnegoLogin("hnelson", "hnelson", "secret");
+
+        // User-profile data should be present (including KERBEROS_PRINCIPAL attribute)
+        UserResource johnResource = ApiUtil.findUserByUsernameId(testRealmResource(), "hnelson");
+        UserRepresentation john = johnResource.toRepresentation(true);
+        Assert.assertNames(john.getUserProfileMetadata().getAttributes(), UserModel.FIRST_NAME, UserModel.LAST_NAME, UserModel.EMAIL, UserModel.USERNAME, KerberosConstants.KERBEROS_PRINCIPAL);
+        johnResource.remove();
+
+        try {
+            john = johnResource.toRepresentation(true);
+            Assert.fail("should remove the user");
+        } catch (NotFoundException expected) {
+        }
     }
 }

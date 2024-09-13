@@ -22,6 +22,7 @@ import java.util.function.BiFunction;
 
 import org.jboss.logging.Logger;
 import org.keycloak.authorization.AuthorizationProvider;
+import org.keycloak.authorization.attribute.Attributes.Entry;
 import org.keycloak.authorization.identity.Identity;
 import org.keycloak.authorization.model.Policy;
 import org.keycloak.authorization.policy.evaluation.Evaluation;
@@ -31,6 +32,8 @@ import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.RealmModel;
 import org.keycloak.models.RoleModel;
 import org.keycloak.models.UserModel;
+import org.keycloak.models.UserProvider;
+import org.keycloak.representations.JsonWebToken;
 import org.keycloak.representations.idm.authorization.RolePolicyRepresentation;
 
 /**
@@ -59,9 +62,10 @@ public class RolePolicyProvider implements PolicyProvider {
             RoleModel role = realm.getRoleById(roleDefinition.getId());
 
             if (role != null) {
-                boolean hasRole = hasRole(identity, role, realm, authorizationProvider, policyRep.isFetchRoles());
+                boolean isFetchRoles = policyRep.isFetchRoles() != null && policyRep.isFetchRoles();
+                boolean hasRole = hasRole(identity, role, realm, authorizationProvider, isFetchRoles);
 
-                if (!hasRole && roleDefinition.isRequired()) {
+                if (!hasRole && roleDefinition.isRequired() != null && roleDefinition.isRequired()) {
                     evaluation.deny();
                     return;
                 } else if (hasRole) {
@@ -69,14 +73,13 @@ public class RolePolicyProvider implements PolicyProvider {
                 }
             }
         }
-        logger.debugv("policy {} evaluated with status {} on identity {}", policy.getName(), evaluation.getEffect(), identity.getId());
+        logger.debugf("policy %s evaluated with status %s on identity %s", policy.getName(), evaluation.getEffect(), identity.getId());
     }
 
     private boolean hasRole(Identity identity, RoleModel role, RealmModel realm, AuthorizationProvider authorizationProvider, boolean fetchRoles) {
         if (fetchRoles) {
-            KeycloakSession session = authorizationProvider.getKeycloakSession();
-            UserModel user = session.users().getUserById(realm, identity.getId());
-            return user.hasRole(role);
+            UserModel subject = getSubject(identity, realm, authorizationProvider);
+            return subject != null && subject.hasRole(role);
         }
         String roleName = role.getName();
         if (role.isClientRole()) {
@@ -84,6 +87,24 @@ public class RolePolicyProvider implements PolicyProvider {
             return identity.hasClientRole(clientModel.getClientId(), roleName);
         }
         return identity.hasRealmRole(roleName);
+    }
+
+    private UserModel getSubject(Identity identity, RealmModel realm, AuthorizationProvider authorizationProvider) {
+        KeycloakSession session = authorizationProvider.getKeycloakSession();
+        UserProvider users = session.users();
+        UserModel user = users.getUserById(realm, identity.getId());
+
+        if (user == null) {
+            Entry sub = identity.getAttributes().getValue(JsonWebToken.SUBJECT);
+
+            if (sub == null || sub.isEmpty()) {
+                return null;
+            }
+
+            return users.getUserById(realm, sub.asString(0));
+        }
+
+        return user;
     }
 
     @Override

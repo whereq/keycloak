@@ -1,4 +1,3 @@
-import RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
 import {
   Button,
   Modal,
@@ -12,15 +11,15 @@ import { CheckCircleIcon } from "@patternfly/react-icons";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../admin-client";
 import { fetchUsedBy } from "../../components/role-mapping/resource";
-import { KeycloakDataTable } from "../../components/table-toolbar/KeycloakDataTable";
+import { KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import useToggle from "../../utils/useToggle";
 import { AuthenticationType, REALM_FLOWS } from "../AuthenticationSection";
 
 import style from "./used-by.module.css";
+import { useRealm } from "../../context/realm-context/RealmContext";
 
 type UsedByProps = {
   authType: AuthenticationType;
-  realm: RealmRepresentation;
 };
 
 const Label = ({ label }: { label: string }) => (
@@ -96,11 +95,12 @@ const UsedByModal = ({ id, isSpecificClient, onClose }: UsedByModalProps) => {
   );
 };
 
-export const UsedBy = ({ authType: { id, usedBy }, realm }: UsedByProps) => {
+export const UsedBy = ({ authType: { id, usedBy } }: UsedByProps) => {
   const { t } = useTranslation();
+  const { realmRepresentation: realm } = useRealm();
   const [open, toggle] = useToggle();
 
-  const key = Object.entries(realm).find(
+  const key = Object.entries(realm!).find(
     (e) => e[1] === usedBy?.values[0],
   )?.[0];
 

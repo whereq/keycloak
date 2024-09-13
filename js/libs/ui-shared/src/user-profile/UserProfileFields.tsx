@@ -5,7 +5,7 @@ import {
 } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
 import { Text } from "@patternfly/react-core";
 import { TFunction } from "i18next";
-import { ReactNode, useMemo } from "react";
+import { ReactNode, useMemo, type JSX } from "react";
 import { FieldPath, UseFormReturn } from "react-hook-form";
 
 import { ScrollForm } from "../main";
@@ -25,26 +25,23 @@ export type Options = {
   options?: string[];
 };
 
-const INPUT_TYPES = [
-  "text",
-  "textarea",
-  "select",
-  "select-radiobuttons",
-  "multiselect",
-  "multiselect-checkboxes",
-  "html5-email",
-  "html5-tel",
-  "html5-url",
-  "html5-number",
-  "html5-range",
-  "html5-datetime-local",
-  "html5-date",
-  "html5-month",
-  "html5-time",
-  "multi-input",
-] as const;
-
-export type InputType = (typeof INPUT_TYPES)[number];
+export type InputType =
+  | "text"
+  | "textarea"
+  | "select"
+  | "select-radiobuttons"
+  | "multiselect"
+  | "multiselect-checkboxes"
+  | "html5-email"
+  | "html5-tel"
+  | "html5-url"
+  | "html5-number"
+  | "html5-range"
+  | "html5-datetime-local"
+  | "html5-date"
+  | "html5-month"
+  | "html5-time"
+  | "multi-input";
 
 export type UserProfileFieldProps = {
   t: TFunction;
@@ -192,7 +189,8 @@ const FormField = ({
   const inputType = useMemo(() => determineInputType(attribute), [attribute]);
 
   const Component =
-    attribute.multivalued || isMultiValue(value)
+    attribute.multivalued ||
+    (isMultiValue(value) && attribute.annotations?.inputType === undefined)
       ? FIELDS["multi-input"]
       : FIELDS[inputType];
 

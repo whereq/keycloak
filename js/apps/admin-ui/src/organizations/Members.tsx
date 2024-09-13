@@ -12,9 +12,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
-import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
+import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
+import { KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { MemberModal } from "../groups/MembersModal";
 import { toUser } from "../user/routes/User";
@@ -72,9 +72,7 @@ export const Members = () => {
     <PageSection variant="light">
       {openAddMembers && (
         <MemberModal
-          membersQuery={async () =>
-            await adminClient.organizations.listMembers({ orgId })
-          }
+          membersQuery={() => adminClient.organizations.listMembers({ orgId })}
           onAdd={async (selectedRows) => {
             try {
               await Promise.all(
@@ -113,6 +111,7 @@ export const Members = () => {
           <>
             <ToolbarItem>
               <Dropdown
+                onOpenChange={toggle}
                 toggle={(ref) => (
                   <MenuToggle
                     ref={ref}

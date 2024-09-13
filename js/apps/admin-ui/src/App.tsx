@@ -1,28 +1,29 @@
 import KeycloakAdminClient from "@keycloak/keycloak-admin-client";
-import { Page } from "@patternfly/react-core";
-import { PropsWithChildren, Suspense, useEffect, useState } from "react";
-import { Outlet } from "react-router-dom";
 import {
   mainPageContentId,
   useEnvironment,
 } from "@keycloak/keycloak-ui-shared";
-import { Header } from "./PageHeader";
-import { PageNav } from "./PageNav";
-import { AdminClientContext, initAdminClient } from "./admin-client";
-import { AlertProvider } from "./components/alert/Alerts";
-import { PageBreadCrumbs } from "./components/bread-crumb/PageBreadCrumbs";
-import { ErrorRenderer } from "./components/error/ErrorRenderer";
-import { KeycloakSpinner } from "./components/keycloak-spinner/KeycloakSpinner";
+import { Page } from "@patternfly/react-core";
+import { PropsWithChildren, Suspense, useEffect, useState } from "react";
+import { Outlet } from "react-router-dom";
+
 import {
   ErrorBoundaryFallback,
   ErrorBoundaryProvider,
-} from "./context/ErrorBoundary";
-import { RealmsProvider } from "./context/RealmsContext";
+  KeycloakSpinner,
+} from "@keycloak/keycloak-ui-shared";
+import { Banners } from "./Banners";
+import { Header } from "./PageHeader";
+import { PageNav } from "./PageNav";
+import { AdminClientContext, initAdminClient } from "./admin-client";
+import { PageBreadCrumbs } from "./components/bread-crumb/PageBreadCrumbs";
+import { ErrorRenderer } from "./components/error/ErrorRenderer";
 import { RecentRealmsProvider } from "./context/RecentRealms";
 import { AccessContextProvider } from "./context/access/Access";
 import { RealmContextProvider } from "./context/realm-context/RealmContext";
 import { ServerInfoProvider } from "./context/server-info/ServerInfoProvider";
 import { WhoAmIContextProvider } from "./context/whoami/WhoAmI";
+import type { Environment } from "./environment";
 import { SubGroups } from "./groups/SubGroupsContext";
 import { AuthWall } from "./root/AuthWall";
 
@@ -31,15 +32,11 @@ const AppContexts = ({ children }: PropsWithChildren) => (
     <ServerInfoProvider>
       <RealmContextProvider>
         <WhoAmIContextProvider>
-          <RealmsProvider>
-            <RecentRealmsProvider>
-              <AccessContextProvider>
-                <AlertProvider>
-                  <SubGroups>{children}</SubGroups>
-                </AlertProvider>
-              </AccessContextProvider>
-            </RecentRealmsProvider>
-          </RealmsProvider>
+          <RecentRealmsProvider>
+            <AccessContextProvider>
+              <SubGroups>{children}</SubGroups>
+            </AccessContextProvider>
+          </RecentRealmsProvider>
         </WhoAmIContextProvider>
       </RealmContextProvider>
     </ServerInfoProvider>
@@ -47,7 +44,7 @@ const AppContexts = ({ children }: PropsWithChildren) => (
 );
 
 export const App = () => {
-  const { keycloak, environment } = useEnvironment();
+  const { keycloak, environment } = useEnvironment<Environment>();
   const [adminClient, setAdminClient] = useState<KeycloakAdminClient>();
 
   useEffect(() => {
@@ -62,6 +59,7 @@ export const App = () => {
   return (
     <AdminClientContext.Provider value={{ keycloak, adminClient }}>
       <AppContexts>
+        <Banners />
         <Page
           header={<Header />}
           isManagedSidebar

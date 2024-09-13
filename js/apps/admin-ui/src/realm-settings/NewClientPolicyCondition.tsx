@@ -2,7 +2,13 @@ import type { ConfigPropertyRepresentation } from "@keycloak/keycloak-admin-clie
 import type ClientPolicyConditionRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientPolicyConditionRepresentation";
 import type ClientPolicyRepresentation from "@keycloak/keycloak-admin-client/lib/defs/clientPolicyRepresentation";
 import type ComponentTypeRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentTypeRepresentation";
-import { HelpItem } from "@keycloak/keycloak-ui-shared";
+import {
+  HelpItem,
+  KeycloakSelect,
+  SelectVariant,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
   AlertVariant,
@@ -17,17 +23,11 @@ import { Controller, FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
 import { DynamicComponents } from "../components/dynamic/DynamicComponents";
 import { FormAccess } from "../components/form/FormAccess";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../components/select/KeycloakSelect";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import { useServerInfo } from "../context/server-info/ServerInfoProvider";
-import { useFetch } from "../utils/useFetch";
 import { toEditClientPolicy } from "./routes/EditClientPolicy";
 import type { EditClientPolicyConditionParams } from "./routes/EditCondition";
 

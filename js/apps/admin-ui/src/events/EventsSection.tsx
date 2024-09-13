@@ -1,7 +1,14 @@
 import type EventRepresentation from "@keycloak/keycloak-admin-client/lib/defs/eventRepresentation";
 import type EventType from "@keycloak/keycloak-admin-client/lib/defs/eventTypes";
 import type { RealmEventsConfigRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/realmEventsConfigRepresentation";
-import { TextControl } from "@keycloak/keycloak-ui-shared";
+import {
+  KeycloakDataTable,
+  KeycloakSelect,
+  ListEmptyState,
+  SelectVariant,
+  TextControl,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
   Button,
@@ -24,7 +31,7 @@ import {
   Tooltip,
 } from "@patternfly/react-core";
 import { CheckCircleIcon, WarningTriangleIcon } from "@patternfly/react-icons";
-import { cellWidth, expandable } from "@patternfly/react-table";
+import { cellWidth } from "@patternfly/react-table";
 import { pickBy } from "lodash-es";
 import { useState } from "react";
 import { Controller, FormProvider, useForm } from "react-hook-form";
@@ -32,22 +39,15 @@ import { Trans, useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
 import DropdownPanel from "../components/dropdown-panel/DropdownPanel";
-import { ListEmptyState } from "../components/list-empty-state/ListEmptyState";
 import {
   RoutableTabs,
   useRoutableTab,
 } from "../components/routable-tabs/RoutableTabs";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../components/select/KeycloakSelect";
-import { KeycloakDataTable } from "../components/table-toolbar/KeycloakDataTable";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import helpUrls from "../help-urls";
 import { toRealmSettings } from "../realm-settings/routes/RealmSettings";
 import { toUser } from "../user/routes/User";
-import { useFetch } from "../utils/useFetch";
 import useFormatDate, { FORMAT_DATE_AND_TIME } from "../utils/useFormatDate";
 import { AdminEvents } from "./AdminEvents";
 import { EventsTab, toEvents } from "./routes/Events";
@@ -468,7 +468,6 @@ export default function EventsSection() {
                   {
                     name: "time",
                     displayKey: "time",
-                    cellFormatters: [expandable],
                     cellRenderer: (row) =>
                       formatDate(new Date(row.time!), FORMAT_DATE_AND_TIME),
                   },

@@ -1,7 +1,7 @@
 package org.keycloak.quarkus.runtime.configuration.mappers;
 
 import static java.util.Optional.of;
-import static org.keycloak.config.LoggingOptions.GELF_ACTIVATED;
+import static org.keycloak.config.LoggingOptions.DEFAULT_LOG_FORMAT;
 import static org.keycloak.quarkus.runtime.configuration.Configuration.isTrue;
 import static org.keycloak.quarkus.runtime.configuration.mappers.PropertyMapper.fromOption;
 
@@ -12,20 +12,20 @@ import java.util.function.BiFunction;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
-import org.apache.commons.lang3.ArrayUtils;
 import org.jboss.logmanager.LogContext;
 import org.keycloak.config.LoggingOptions;
+import org.keycloak.config.Option;
 import org.keycloak.quarkus.runtime.Messages;
 import org.keycloak.quarkus.runtime.cli.PropertyException;
 
 import io.smallrye.config.ConfigSourceInterceptorContext;
+import org.keycloak.quarkus.runtime.configuration.Configuration;
 
 public final class LoggingPropertyMappers {
 
     private static final String CONSOLE_ENABLED_MSG = "Console log handler is activated";
     private static final String FILE_ENABLED_MSG = "File log handler is activated";
     private static final String SYSLOG_ENABLED_MSG = "Syslog is activated";
-    private static final String GELF_ENABLED_MSG = "GELF is activated";
 
     private LoggingPropertyMappers() {
     }
@@ -46,6 +46,11 @@ public final class LoggingPropertyMappers {
                         .isEnabled(LoggingPropertyMappers::isConsoleEnabled, CONSOLE_ENABLED_MSG)
                         .to("quarkus.log.console.format")
                         .paramLabel("format")
+                        .transformer((value, ctx) -> addTracingInfo(value, LoggingOptions.LOG_CONSOLE_INCLUDE_TRACE))
+                        .build(),
+                fromOption(LoggingOptions.LOG_CONSOLE_INCLUDE_TRACE)
+                        .isEnabled(() -> LoggingPropertyMappers.isConsoleEnabled() && TracingPropertyMappers.isTracingEnabled(),
+                                "Console log handler and Tracing is activated")
                         .build(),
                 fromOption(LoggingOptions.LOG_CONSOLE_COLOR)
                         .isEnabled(LoggingPropertyMappers::isConsoleEnabled, CONSOLE_ENABLED_MSG)
@@ -72,6 +77,11 @@ public final class LoggingPropertyMappers {
                         .isEnabled(LoggingPropertyMappers::isFileEnabled, FILE_ENABLED_MSG)
                         .to("quarkus.log.file.format")
                         .paramLabel("format")
+                        .transformer((value, ctx) -> addTracingInfo(value, LoggingOptions.LOG_FILE_INCLUDE_TRACE))
+                        .build(),
+                fromOption(LoggingOptions.LOG_FILE_INCLUDE_TRACE)
+                        .isEnabled(() -> LoggingPropertyMappers.isFileEnabled() && TracingPropertyMappers.isTracingEnabled(),
+                                "File log handler and Tracing is activated")
                         .build(),
                 fromOption(LoggingOptions.LOG_FILE_OUTPUT)
                         .isEnabled(LoggingPropertyMappers::isFileEnabled, FILE_ENABLED_MSG)
@@ -83,8 +93,7 @@ public final class LoggingPropertyMappers {
                 fromOption(LoggingOptions.LOG_LEVEL)
                         .to("quarkus.log.level")
                         .transformer(LoggingPropertyMappers::resolveLogLevel)
-                        .validator((mapper, value) -> mapper.validateExpectedValues(value,
-                                (c, v) -> validateLogLevel(v)))
+                        .validator(LoggingPropertyMappers::validateLogLevel)
                         .paramLabel("category:level")
                         .build(),
                 // Syslog
@@ -103,6 +112,16 @@ public final class LoggingPropertyMappers {
                         .to("quarkus.log.syslog.app-name")
                         .paramLabel("name")
                         .build(),
+                fromOption(LoggingOptions.LOG_SYSLOG_TYPE)
+                        .isEnabled(LoggingPropertyMappers::isSyslogEnabled, SYSLOG_ENABLED_MSG)
+                        .to("quarkus.log.syslog.syslog-type")
+                        .paramLabel("type")
+                        .build(),
+                fromOption(LoggingOptions.LOG_SYSLOG_MAX_LENGTH)
+                        .isEnabled(LoggingPropertyMappers::isSyslogEnabled, SYSLOG_ENABLED_MSG)
+                        .to("quarkus.log.syslog.max-length")
+                        .paramLabel("max-length")
+                        .build(),
                 fromOption(LoggingOptions.LOG_SYSLOG_PROTOCOL)
                         .isEnabled(LoggingPropertyMappers::isSyslogEnabled, SYSLOG_ENABLED_MSG)
                         .to("quarkus.log.syslog.protocol")
@@ -112,6 +131,11 @@ public final class LoggingPropertyMappers {
                         .isEnabled(LoggingPropertyMappers::isSyslogEnabled, SYSLOG_ENABLED_MSG)
                         .to("quarkus.log.syslog.format")
                         .paramLabel("format")
+                        .transformer((value, ctx) -> addTracingInfo(value, LoggingOptions.LOG_SYSLOG_INCLUDE_TRACE))
+                        .build(),
+                fromOption(LoggingOptions.LOG_SYSLOG_INCLUDE_TRACE)
+                        .isEnabled(() -> LoggingPropertyMappers.isSyslogEnabled() && TracingPropertyMappers.isTracingEnabled(),
+                                "Syslog handler and Tracing is activated")
                         .build(),
                 fromOption(LoggingOptions.LOG_SYSLOG_OUTPUT)
                         .isEnabled(LoggingPropertyMappers::isSyslogEnabled, SYSLOG_ENABLED_MSG)
@@ -121,68 +145,7 @@ public final class LoggingPropertyMappers {
                         .build(),
         };
 
-        return GELF_ACTIVATED ? ArrayUtils.addAll(defaultMappers, getGelfMappers()) : defaultMappers;
-    }
-
-    public static PropertyMapper<?>[] getGelfMappers() {
-        return new PropertyMapper[]{
-                fromOption(LoggingOptions.LOG_GELF_ENABLED)
-                        .mapFrom("log")
-                        .to("quarkus.log.handler.gelf.enabled")
-                        .transformer(LoggingPropertyMappers.resolveLogHandler("gelf"))
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_LEVEL)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.level")
-                        .paramLabel("level")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_HOST)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.host")
-                        .paramLabel("hostname")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_PORT)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.port")
-                        .paramLabel("port")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_VERSION)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.version")
-                        .paramLabel("version")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_INCLUDE_STACK_TRACE)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.extract-stack-trace")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_TIMESTAMP_FORMAT)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.timestamp-pattern")
-                        .paramLabel("pattern")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_FACILITY)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.facility")
-                        .paramLabel("name")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_MAX_MSG_SIZE)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.maximum-message-size")
-                        .paramLabel("size")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_INCLUDE_LOG_MSG_PARAMS)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.include-log-message-parameters")
-                        .build(),
-                fromOption(LoggingOptions.LOG_GELF_INCLUDE_LOCATION)
-                        .isEnabled(LoggingPropertyMappers::isGelfEnabled, GELF_ENABLED_MSG)
-                        .to("quarkus.log.handler.gelf.include-location")
-                        .build()
-        };
-    }
-
-    public static boolean isGelfEnabled() {
-        return isTrue(LoggingOptions.LOG_GELF_ENABLED);
+        return defaultMappers;
     }
 
     public static boolean isConsoleEnabled() {
@@ -264,5 +227,20 @@ public final class LoggingPropertyMappers {
         }
 
         return of(Boolean.TRUE.toString());
+    }
+
+    /**
+     * Add tracing info to the log if the format is not explicitly set, and tracing and {@code includeTraceOption} options are enabled
+     */
+    private static Optional<String> addTracingInfo(Optional<String> value, Option<Boolean> includeTraceOption) {
+        var isTracingEnabled = TracingPropertyMappers.isTracingEnabled();
+        var includeTrace = Configuration.isTrue(includeTraceOption);
+        var isChangedLogFormat = !DEFAULT_LOG_FORMAT.equals(value.get());
+
+        if (!isTracingEnabled || !includeTrace || isChangedLogFormat) {
+            return value;
+        }
+
+        return Optional.of(LoggingOptions.DEFAULT_LOG_TRACING_FORMAT);
     }
 }

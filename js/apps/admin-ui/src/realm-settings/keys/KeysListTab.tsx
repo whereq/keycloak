@@ -1,6 +1,12 @@
 import type ComponentRepresentation from "@keycloak/keycloak-admin-client/lib/defs/componentRepresentation";
 import type { KeyMetadataRepresentation } from "@keycloak/keycloak-admin-client/lib/defs/keyMetadataRepresentation";
 import {
+  KeycloakDataTable,
+  KeycloakSelect,
+  SelectVariant,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
+import {
   Button,
   ButtonVariant,
   PageSection,
@@ -13,16 +19,10 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../components/select/KeycloakSelect";
-import { KeycloakDataTable } from "../../components/table-toolbar/KeycloakDataTable";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
+import { ListEmptyState } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { emptyFormatter } from "../../util";
-import { useFetch } from "../../utils/useFetch";
 import useFormatDate from "../../utils/useFormatDate";
 import useToggle from "../../utils/useToggle";
 import { toKeysTab } from "../routes/KeysTab";
@@ -153,7 +153,6 @@ export const KeysListTab = ({ realmComponents }: KeysListTabProps) => {
             }
           />
         }
-        canSelectAll
         columns={[
           {
             name: "algorithm",
@@ -182,16 +181,14 @@ export const KeysListTab = ({ realmComponents }: KeysListTabProps) => {
           {
             name: "provider",
             displayKey: "provider",
-            cellRenderer: ({ provider }: KeyData) => provider || "",
-            cellFormatters: [emptyFormatter()],
+            cellRenderer: ({ provider }: KeyData) => provider || "-",
             transforms: [cellWidth(10)],
           },
           {
             name: "validTo",
             displayKey: "validTo",
             cellRenderer: ({ validTo }: KeyData) =>
-              validTo ? formatDate(new Date(validTo)) : "",
-            cellFormatters: [emptyFormatter()],
+              validTo ? formatDate(new Date(validTo)) : "-",
             transforms: [cellWidth(10)],
           },
           {
@@ -252,7 +249,6 @@ export const KeysListTab = ({ realmComponents }: KeysListTabProps) => {
                 );
               } else return "";
             },
-            cellFormatters: [],
             transforms: [cellWidth(20)],
           },
         ]}

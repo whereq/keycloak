@@ -45,15 +45,19 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
 
     private static final Logger LOGGER = Logger.getLogger(PreAuthorizedCodeGrantType.class);
 
+    public static final String VC_ISSUANCE_FLOW = "VC-Issuance-Flow";
+
     @Override
     public Response process(Context context) {
         LOGGER.debug("Process grant request for preauthorized.");
         setContext(context);
 
-        String code = formParams.getFirst(OAuth2Constants.CODE);
+        // See: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-token-request
+        String code = formParams.getFirst(PreAuthorizedCodeGrantTypeFactory.CODE_REQUEST_PARAM);
 
         if (code == null) {
-            String errorMessage = "Missing parameter: " + OAuth2Constants.CODE;
+            // See: https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-token-request
+            String errorMessage = "Missing parameter: " + PreAuthorizedCodeGrantTypeFactory.CODE_REQUEST_PARAM;
             event.detail(Details.REASON, errorMessage);
             event.error(Errors.INVALID_CODE);
             throw new CorsErrorResponseException(cors, OAuthErrorException.INVALID_REQUEST,
@@ -73,6 +77,7 @@ public class PreAuthorizedCodeGrantType extends OAuth2GrantTypeBase {
         AuthenticatedClientSessionModel clientSession = result.getClientSession();
         ClientSessionContext sessionContext = DefaultClientSessionContext.fromClientSessionAndScopeParameter(clientSession,
                 OAuth2Constants.SCOPE_OPENID, session);
+        clientSession.setNote(VC_ISSUANCE_FLOW, PreAuthorizedCodeGrantTypeFactory.GRANT_TYPE);
 
 
         // set the client as retrieved from the pre-authorized session

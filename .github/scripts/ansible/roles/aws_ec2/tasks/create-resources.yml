@@ -1,5 +1,5 @@
 - name: Get Ansible Control Host's public IP
-  shell: curl -ks --ipv4 https://ifconfig.me
+  shell: curl -fks --ipv4 https://ifconfig.me
   register: control_host_ip
   no_log: "{{ no_log_sensitive }}"
 
@@ -18,6 +18,13 @@
         cidr_ip: '{{cidr_ip}}'
   register: group
   no_log: "{{ no_log_sensitive }}"
+
+- name: Delete existing key pair if it exists
+  amazon.aws.ec2_key:
+    region: '{{ region }}'
+    name: '{{ cluster_name }}'
+    state: absent
+  ignore_errors: true
 
 - name: Create Key
   amazon.aws.ec2_key:

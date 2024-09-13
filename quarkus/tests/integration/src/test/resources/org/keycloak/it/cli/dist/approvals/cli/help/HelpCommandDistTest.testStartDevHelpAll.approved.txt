@@ -74,7 +74,8 @@ Cache:
 --cache-stack <stack>
                      Define the default stack to use for cluster communication and node discovery.
                        This option only takes effect if 'cache' is set to 'ispn'. Default: udp.
-                       Built-in values include: tcp, udp, kubernetes, ec2, azure, google
+                       Possible values are: tcp, udp, kubernetes, ec2, azure, google, or a custom
+                       one.
 
 Config:
 
@@ -157,47 +158,6 @@ Hostname v2:
                        the Host header. If enabled, the 'hostname' option needs to be specified.
                        Default: true. Available only when hostname:v2 feature is enabled.
 
-Hostname v1 (Deprecated):
-
---hostname <hostname>
-                     DEPRECATED. Hostname for the Keycloak server. Available only when hostname:v1
-                       feature is enabled.
---hostname-admin <hostname>
-                     DEPRECATED. The hostname for accessing the administration console. Use this
-                       option if you are exposing the administration console using a hostname other
-                       than the value set to the 'hostname' option. Available only when hostname:v1
-                       feature is enabled.
---hostname-admin-url <url>
-                     DEPRECATED. Set the base URL for accessing the administration console,
-                       including scheme, host, port and path Available only when hostname:v1
-                       feature is enabled.
---hostname-debug <true|false>
-                     DEPRECATED. Toggle the hostname debug page that is accessible at
-                       /realms/master/hostname-debug Default: false. Available only when hostname:
-                       v1 feature is enabled.
---hostname-path <path>
-                     DEPRECATED. This should be set if proxy uses a different context-path for
-                       Keycloak. Available only when hostname:v1 feature is enabled.
---hostname-port <port>
-                     DEPRECATED. The port used by the proxy when exposing the hostname. Set this
-                       option if the proxy uses a port other than the default HTTP and HTTPS ports.
-                       Default: -1. Available only when hostname:v1 feature is enabled.
---hostname-strict <true|false>
-                     DEPRECATED. Disables dynamically resolving the hostname from request headers.
-                       Should always be set to true in production, unless proxy verifies the Host
-                       header. Default: true. Available only when hostname:v1 feature is enabled.
---hostname-strict-backchannel <true|false>
-                     DEPRECATED. By default backchannel URLs are dynamically resolved from request
-                       headers to allow internal and external applications. If all applications use
-                       the public URL this option should be enabled. Default: false. Available only
-                       when hostname:v1 feature is enabled.
---hostname-strict-https <true|false>
-                     DEPRECATED. Forces frontend URLs to use the 'https' scheme. If set to false,
-                       the HTTP scheme is inferred from requests. Default: true. Available only
-                       when hostname:v1 feature is enabled.
---hostname-url <url> DEPRECATED. Set the base URL for frontend URLs, including scheme, host, port
-                       and path. Available only when hostname:v1 feature is enabled.
-
 HTTP(S):
 
 --http-enabled <true|false>
@@ -240,8 +200,8 @@ HTTP(S):
                      The password of the key store file. Default: password.
 --https-key-store-type <type>
                      The type of the key store file. If not given, the type is automatically
-                       detected based on the file name. If 'fips-mode' is set to 'strict' and no
-                       value is set, it defaults to 'BCFKS'.
+                       detected based on the file extension. If 'fips-mode' is set to 'strict' and
+                       no value is set, it defaults to 'BCFKS'.
 --https-port <port>  The used HTTPS port. Default: 8443.
 --https-protocols <protocols>
                      The list of protocols to explicitly enable. Default: TLSv1.3,TLSv1.2.
@@ -254,7 +214,7 @@ HTTP(S):
                        instead, see the docs for details.
 --https-trust-store-type <type>
                      DEPRECATED. The type of the trust store file. If not given, the type is
-                       automatically detected based on the file name. If 'fips-mode' is set to
+                       automatically detected based on the file extension. If 'fips-mode' is set to
                        'strict' and no value is set, it defaults to 'BCFKS'. Use the System
                        Truststore instead, see the docs for details.
 
@@ -268,35 +228,37 @@ Health:
 Management:
 
 --http-management-port <port>
-                     Port of the management interface. Default: 9000. Available only when
-                       Management interface is enabled.
+                     Port of the management interface. Relevant only when something is exposed on
+                       the management interface - see the guide for details. Default: 9000.
 --http-management-relative-path <path>
                      Set the path relative to '/' for serving resources from management interface.
                        The path must start with a '/'. If not given, the value is inherited from
-                       HTTP options. Default: /. Available only when Management interface is
-                       enabled.
+                       HTTP options. Relevant only when something is exposed on the management
+                       interface - see the guide for details. Default: /.
 --https-management-certificate-file <file>
                      The file path to a server certificate or certificate chain in PEM format for
                        the management server. If not given, the value is inherited from HTTP
-                       options. Available only when Management interface is enabled.
+                       options. Relevant only when something is exposed on the management interface
+                       - see the guide for details.
 --https-management-certificate-key-file <file>
                      The file path to a private key in PEM format for the management server. If not
-                       given, the value is inherited from HTTP options. Available only when
-                       Management interface is enabled.
+                       given, the value is inherited from HTTP options. Relevant only when
+                       something is exposed on the management interface - see the guide for details.
 --https-management-client-auth <auth>
                      Configures the management interface to require/request client authentication.
-                       If not given, the value is inherited from HTTP options. Possible values are:
-                       none, request, required. Default: none. Available only when Management
-                       interface is enabled.
+                       If not given, the value is inherited from HTTP options. Relevant only when
+                       something is exposed on the management interface - see the guide for
+                       details. Possible values are: none, request, required. Default: none.
 --https-management-key-store-file <file>
                      The key store which holds the certificate information instead of specifying
                        separate files for the management server. If not given, the value is
-                       inherited from HTTP options. Available only when Management interface is
-                       enabled.
+                       inherited from HTTP options. Relevant only when something is exposed on the
+                       management interface - see the guide for details.
 --https-management-key-store-password <password>
                      The password of the key store file for the management server. If not given,
-                       the value is inherited from HTTP options. Default: password. Available only
-                       when Management interface is enabled.
+                       the value is inherited from HTTP options. Relevant only when something is
+                       exposed on the management interface - see the guide for details. Default:
+                       password.
 --legacy-observability-interface <true|false>
                      DEPRECATED. If metrics/health endpoints should be exposed on the main HTTP
                        server (not recommended). If set to true, the management interface is
@@ -310,13 +272,16 @@ Metrics:
 
 Proxy:
 
---proxy <mode>       DEPRECATED. The proxy address forwarding mode if the server is behind a
-                       reverse proxy. Possible values are: none, edge, reencrypt, passthrough.
-                       Default: none. Use the following option instead: proxy-headers.
 --proxy-headers <headers>
                      The proxy headers that should be accepted by the server. Misconfiguration
                        might leave the server exposed to security vulnerabilities. Takes precedence
                        over the deprecated proxy option. Possible values are: forwarded, xforwarded.
+--proxy-trusted-addresses <trusted proxies>
+                     A comma separated list of trusted proxy addresses. If set, then proxy headers
+                       from other addresses will be ignored. By default all addresses are trusted.
+                       A trusted proxy address is specified as an IP address (IPv4 or IPv6) or
+                       Classless Inter-Domain Routing (CIDR) notation. Available only when
+                       proxy-headers is set.
 
 Vault:
 
@@ -330,7 +295,7 @@ Vault:
 Logging:
 
 --log <handler>      Enable one or more log handlers in a comma-separated list. Possible values
-                       are: console, file, syslog, gelf (deprecated). Default: console.
+                       are: console, file, syslog. Default: console.
 --log-console-color <true|false>
                      Enable or disable colors when logging to console. Default: false. Available
                        only when Console log handler is activated.
@@ -338,6 +303,10 @@ Logging:
                      The format of unstructured console log entries. If the format has spaces in
                        it, escape the value using "<format>". Default: %d{yyyy-MM-dd HH:mm:ss,SSS} %
                        -5p [%c] (%t) %s%e%n. Available only when Console log handler is activated.
+--log-console-include-trace <true|false>
+                     Include tracing information in the console log. If the 'log-console-format'
+                       option is specified, this option has no effect. Default: true. Available
+                       only when Console log handler and Tracing is activated.
 --log-console-output <output>
                      Set the log output to JSON or default (plain) unstructured logging. Possible
                        values are: default, json. Default: default. Available only when Console log
@@ -348,65 +317,84 @@ Logging:
                      Set a format specific to file log entries. Default: %d{yyyy-MM-dd HH:mm:ss,
                        SSS} %-5p [%c] (%t) %s%e%n. Available only when File log handler is
                        activated.
+--log-file-include-trace <true|false>
+                     Include tracing information in the file log. If the 'log-file-format' option
+                       is specified, this option has no effect. Default: true. Available only when
+                       File log handler and Tracing is activated.
 --log-file-output <output>
                      Set the log output to JSON or default (plain) unstructured logging. Possible
                        values are: default, json. Default: default. Available only when File log
                        handler is activated.
---log-gelf-facility <name>
-                     DEPRECATED. The facility (name of the process) that sends the message.
-                       Default: keycloak. Available only when GELF is activated.
---log-gelf-host <hostname>
-                     DEPRECATED. Hostname of the Logstash or Graylog Host. By default UDP is used,
-                       prefix the host with 'tcp:' to switch to TCP. Example: 'tcp:localhost'
-                       Default: localhost. Available only when GELF is activated.
---log-gelf-include-location <true|false>
-                     DEPRECATED. Include source code location. Default: true. Available only when
-                       GELF is activated.
---log-gelf-include-message-parameters <true|false>
-                     DEPRECATED. Include message parameters from the log event. Default: true.
-                       Available only when GELF is activated.
---log-gelf-include-stack-trace <true|false>
-                     DEPRECATED. If set to true, occurring stack traces are included in the
-                       'StackTrace' field in the GELF output. Default: true. Available only when
-                       GELF is activated.
---log-gelf-level <level>
-                     DEPRECATED. The log level specifying which message levels will be logged by
-                       the GELF logger. Message levels lower than this value will be discarded.
-                       Default: INFO. Available only when GELF is activated.
---log-gelf-max-message-size <size>
-                     DEPRECATED. Maximum message size (in bytes). If the message size is exceeded,
-                       GELF will submit the message in multiple chunks. Default: 8192. Available
-                       only when GELF is activated.
---log-gelf-port <port>
-                     DEPRECATED. The port the Logstash or Graylog Host is called on. Default:
-                       12201. Available only when GELF is activated.
---log-gelf-timestamp-format <pattern>
-                     DEPRECATED. Set the format for the GELF timestamp field. Uses Java
-                       SimpleDateFormat pattern. Default: yyyy-MM-dd HH:mm:ss,SSS. Available only
-                       when GELF is activated.
---log-gelf-version <version>
-                     The GELF version to be used. Possible values are: 1.0, 1.1. Default: 1.1.
-                       Available only when GELF is activated.
 --log-level <category:level>
                      The log level of the root category or a comma-separated list of individual
                        categories and their levels. For the root category, you don't need to
                        specify a category. Default: info.
 --log-syslog-app-name <name>
-                     The app name used when formatting the message in RFC5424 format. Default:
+                     Set the app name used when formatting the message in RFC5424 format. Default:
                        keycloak. Available only when Syslog is activated.
 --log-syslog-endpoint <host:port>
-                     The IP address and port of the syslog server. Default: localhost:514.
+                     Set the IP address and port of the Syslog server. Default: localhost:514.
                        Available only when Syslog is activated.
 --log-syslog-format <format>
-                     Set a format specific to syslog entries. Default: %d{yyyy-MM-dd HH:mm:ss,SSS} %
+                     Set a format specific to Syslog entries. Default: %d{yyyy-MM-dd HH:mm:ss,SSS} %
                        -5p [%c] (%t) %s%e%n. Available only when Syslog is activated.
+--log-syslog-include-trace <true|false>
+                     Include tracing information in the Syslog. If the 'log-syslog-format' option
+                       is specified, this option has no effect. Default: true. Available only when
+                       Syslog handler and Tracing is activated.
+--log-syslog-max-length <max-length>
+                     Set the maximum length, in bytes, of the message allowed to be sent. The
+                       length includes the header and the message. If not set, the default value is
+                       2048 when 'log-syslog-type' is rfc5424 (default) and 1024 when
+                       'log-syslog-type' is rfc3164. Available only when Syslog is activated.
 --log-syslog-output <output>
-                     Set the syslog output to JSON or default (plain) unstructured logging.
+                     Set the Syslog output to JSON or default (plain) unstructured logging.
                        Possible values are: default, json. Default: default. Available only when
                        Syslog is activated.
 --log-syslog-protocol <protocol>
-                     Sets the protocol used to connect to the syslog server. Possible values are:
+                     Set the protocol used to connect to the Syslog server. Possible values are:
                        tcp, udp, ssl-tcp. Default: tcp. Available only when Syslog is activated.
+--log-syslog-type <type>
+                     Set the Syslog type used to format the sent message. Possible values are:
+                       rfc5424, rfc3164. Default: rfc5424. Available only when Syslog is activated.
+
+Tracing (Preview):
+
+--tracing-compression <method>
+                     Preview: OpenTelemetry compression method used to compress payloads. If unset,
+                       compression is disabled. Possible values are: gzip, none. Default: none.
+                       Available only when 'opentelemetry' feature and Tracing is enabled.
+--tracing-enabled <true|false>
+                     Preview: Enables the OpenTelemetry tracing. Default: false. Available only
+                       when 'opentelemetry' feature is enabled.
+--tracing-endpoint <url>
+                     Preview: OpenTelemetry endpoint to connect to. Default: http://localhost:4317.
+                       Available only when 'opentelemetry' feature and Tracing is enabled.
+--tracing-jdbc-enabled <true|false>
+                     Preview: Enables the OpenTelemetry JDBC tracing. Default: true. Available only
+                       when 'opentelemetry' feature and Tracing is enabled.
+--tracing-protocol <protocol>
+                     Preview: OpenTelemetry protocol used for the telemetry data. Possible values
+                       are: grpc, http/protobuf. Default: grpc. Available only when 'opentelemetry'
+                       feature and Tracing is enabled.
+--tracing-resource-attributes <attributes>
+                     Preview: OpenTelemetry resource attributes present in the exported trace to
+                       characterize the telemetry producer. Values in format 'key1=val1,key2=val2'.
+                       For more information, check the Tracing guide. Available only when
+                       'opentelemetry' feature and Tracing is enabled.
+--tracing-sampler-ratio <ratio>
+                     Preview: OpenTelemetry sampler ratio. Probability that a span will be sampled.
+                       Expected double value in interval <0,1). Default: 1.0. Available only when
+                       'opentelemetry' feature and Tracing is enabled.
+--tracing-sampler-type <type>
+                     Preview: OpenTelemetry sampler to use for tracing. Possible values are:
+                       always_on, always_off, traceidratio, parentbased_always_on,
+                       parentbased_always_off, parentbased_traceidratio. Default: traceidratio.
+                       Available only when 'opentelemetry' feature and Tracing is enabled.
+--tracing-service-name <name>
+                     Preview: OpenTelemetry service name. Takes precedence over 'service.name'
+                       defined in the 'tracing-resource-attributes' property. Default: keycloak.
+                       Available only when 'opentelemetry' feature and Tracing is enabled.
 
 Truststore:
 
@@ -426,6 +414,24 @@ Security:
                        which is by default. This option defaults to 'non-strict' when 'fips'
                        feature is enabled. Possible values are: non-strict, strict. Default:
                        disabled.
+
+Bootstrap Admin:
+
+--bootstrap-admin-client-id <client id>
+                     Client id for the temporary bootstrap admin service account. Used only when
+                       the master realm is created. Available only when bootstrap admin client
+                       secret is set. Default: temp-admin.
+--bootstrap-admin-client-secret <client secret>
+                     Client secret for the temporary bootstrap admin service account. Used only
+                       when the master realm is created. Use a non-CLI configuration option for
+                       this option if possible.
+--bootstrap-admin-password <password>
+                     Temporary bootstrap admin password. Used only when the master realm is
+                       created. Use a non-CLI configuration option for this option if possible.
+--bootstrap-admin-username <username>
+                     Temporary bootstrap admin username. Used only when the master realm is
+                       created. Available only when bootstrap admin password is set. Default:
+                       temp-admin.
 
 Do NOT start the server using this command when deploying to production.
 

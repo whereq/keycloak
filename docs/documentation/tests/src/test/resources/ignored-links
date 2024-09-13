@@ -36,4 +36,6 @@ https://account.live.com/developers/applications/create
 https://developer.twitter.com/apps/
 https://kubernetes.io/docs/tutorials/stateful-application/basic-stateful-set/#rolling-update
 https://stackapps.com/apps/oauth/register
-https://www.keycloak.org/server/management-interface
+# Remove following lines once KC26 is released
+https://www.keycloak.org/server/bootstrap-admin-recovery
+https://www.keycloak.org/server/tracing

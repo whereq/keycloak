@@ -1,4 +1,5 @@
 import type { UserProfileAttribute } from "@keycloak/keycloak-admin-client/lib/defs/userProfileMetadata";
+import { KeycloakSelect, SelectVariant } from "@keycloak/keycloak-ui-shared";
 import {
   Button,
   ButtonVariant,
@@ -13,20 +14,16 @@ import { uniqBy } from "lodash-es";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
+import { useAdminClient } from "../../admin-client";
 import { DraggableTable } from "../../authentication/components/DraggableTable";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { useRealm } from "../../context/realm-context/RealmContext";
+import useLocale from "../../utils/useLocale";
 import useToggle from "../../utils/useToggle";
 import { toAddAttribute } from "../routes/AddAttribute";
 import { toAttribute } from "../routes/Attribute";
 import { useUserProfile } from "./UserProfileContext";
-import useLocale from "../../utils/useLocale";
-import { useAdminClient } from "../../admin-client";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../components/select/KeycloakSelect";
 
 const RESTRICTED_ATTRIBUTES = ["username", "email"];
 
@@ -95,7 +92,7 @@ export const AttributesTab = ({ setTableData }: AttributesTabProps) => {
                   });
                 setTableData([updatedData]);
               }
-            } catch (error) {
+            } catch {
               console.error(`Error removing translations for ${locale}`);
             }
           }),
@@ -248,7 +245,6 @@ export const AttributesTab = ({ setTableData }: AttributesTabProps) => {
           {
             title: t("delete"),
             isActionable: ({ name }) => !RESTRICTED_ATTRIBUTES.includes(name!),
-            isDisabled: RESTRICTED_ATTRIBUTES.includes(name!),
             onClick: (_key, _idx, component) => {
               setAttributeToDelete(component.name);
               toggleDeleteDialog();

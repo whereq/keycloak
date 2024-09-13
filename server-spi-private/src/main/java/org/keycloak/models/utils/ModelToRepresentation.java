@@ -21,6 +21,7 @@ import static java.util.Optional.ofNullable;
 import static org.keycloak.models.utils.StripSecretsUtils.stripSecrets;
 
 import org.jboss.logging.Logger;
+import org.keycloak.Config;
 import org.keycloak.authentication.otp.OTPApplicationProvider;
 import org.keycloak.authorization.AuthorizationProvider;
 import org.keycloak.authorization.AuthorizationProviderFactory;
@@ -67,6 +68,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import static org.keycloak.models.light.LightweightUserAdapter.isLightweightUser;
+import static org.keycloak.models.Constants.IS_TEMP_ADMIN_ATTR_NAME;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -219,8 +221,6 @@ public class ModelToRepresentation {
     public static UserRepresentation toRepresentation(KeycloakSession session, RealmModel realm, UserModel user) {
         UserRepresentation rep = new UserRepresentation();
         rep.setId(user.getId());
-        String providerId = StorageId.resolveProviderId(user);
-        rep.setOrigin(providerId);
         rep.setUsername(user.getUsername());
         rep.setCreatedTimestamp(user.getCreatedTimestamp());
         rep.setLastName(user.getLastName());
@@ -264,8 +264,19 @@ public class ModelToRepresentation {
         rep.setEnabled(user.isEnabled());
         rep.setEmailVerified(user.isEmailVerified());
         rep.setFederationLink(user.getFederationLink());
+        addAttributeToBriefRep(user, rep, IS_TEMP_ADMIN_ATTR_NAME);
 
         return rep;
+    }
+
+    private static void addAttributeToBriefRep(UserModel user, UserRepresentation userRep, String attributeName) {
+        String userAttributeValue = user.getFirstAttribute(attributeName);
+        if (userAttributeValue != null) {
+            if (userRep.getAttributes() == null) {
+                userRep.setAttributes(new HashMap<>());
+            }
+            userRep.getAttributes().put(attributeName, Collections.singletonList(userAttributeValue));
+        }
     }
 
     public static EventRepresentation toRepresentation(Event event) {
@@ -343,6 +354,10 @@ public class ModelToRepresentation {
     }
 
     public static RealmRepresentation toRepresentation(KeycloakSession session, RealmModel realm, boolean internal) {
+        return toRepresentation(session, realm, internal, false);
+    }
+
+    public static RealmRepresentation toRepresentation(KeycloakSession session, RealmModel realm, boolean internal, boolean export) {
         RealmRepresentation rep = new RealmRepresentation();
         rep.setId(realm.getId());
         rep.setRealm(realm.getName());
@@ -498,13 +513,14 @@ public class ModelToRepresentation {
             rep.setRequiredCredentials(reqCredentials);
         }
 
-        List<IdentityProviderRepresentation> identityProviders = realm.getIdentityProvidersStream()
-                .map(provider -> toRepresentation(realm, provider)).collect(Collectors.toList());
-        rep.setIdentityProviders(identityProviders);
-
-        List<IdentityProviderMapperRepresentation> identityProviderMappers = realm.getIdentityProviderMappersStream()
-                .map(ModelToRepresentation::toRepresentation).collect(Collectors.toList());
-        rep.setIdentityProviderMappers(identityProviderMappers);
+        if (export) {
+            List<IdentityProviderRepresentation> identityProviders = session.identityProviders().getAllStream()
+                    .map(provider -> toRepresentation(realm, provider, export)).collect(Collectors.toList());
+            rep.setIdentityProviders(identityProviders);
+            List<IdentityProviderMapperRepresentation> identityProviderMappers = session.identityProviders().getMappersStream()
+                    .map(ModelToRepresentation::toRepresentation).collect(Collectors.toList());
+            rep.setIdentityProviderMappers(identityProviderMappers);
+        }
 
         rep.setInternationalizationEnabled(realm.isInternationalizationEnabled());
         rep.setSupportedLocales(realm.getSupportedLocalesStream().collect(Collectors.toSet()));
@@ -732,6 +748,8 @@ public class ModelToRepresentation {
         rep.setNodeReRegistrationTimeout(clientModel.getNodeReRegistrationTimeout());
         rep.setClientAuthenticatorType(clientModel.getClientAuthenticatorType());
 
+        rep.getAttributes().put(Constants.REALM_CLIENT, String.valueOf(isRealmClient(clientModel.getClientId(), clientModel.getRealm(), session)));
+
         // adding the secret if non public or bearer only
         if (clientModel.isBearerOnly() || clientModel.isPublicClient()) {
             rep.setSecret(null);
@@ -773,6 +791,23 @@ public class ModelToRepresentation {
         return rep;
     }
 
+    private static boolean isRealmClient(String clientId, RealmModel realm, KeycloakSession session) {
+        final String realmClientSuffix = "-realm";
+
+        if (clientId == null) {
+            return false;
+        }
+        if (Constants.BROKER_SERVICE_CLIENT_ID.equals(clientId)) {
+            return true;
+        }
+        if (Config.getAdminRealm().equals(realm.getName())) {
+            return clientId.endsWith(realmClientSuffix) && session.realms().getRealmByName(clientId.substring(0, clientId.length() - realmClientSuffix.length())) != null;
+        }
+        else {
+            return Constants.REALM_MANAGEMENT_CLIENT_ID.equals(clientId);
+        }
+    }
+
     public static IdentityProviderRepresentation toBriefRepresentation(RealmModel realm, IdentityProviderModel identityProviderModel) {
         IdentityProviderRepresentation providerRep = new IdentityProviderRepresentation();
 
@@ -787,9 +822,14 @@ public class ModelToRepresentation {
     }
 
     public static IdentityProviderRepresentation toRepresentation(RealmModel realm, IdentityProviderModel identityProviderModel) {
+        return toRepresentation(realm, identityProviderModel, false);
+    }
+
+    public static IdentityProviderRepresentation toRepresentation(RealmModel realm, IdentityProviderModel identityProviderModel, boolean export) {
         IdentityProviderRepresentation providerRep = toBriefRepresentation(realm, identityProviderModel);
 
         providerRep.setLinkOnly(identityProviderModel.isLinkOnly());
+        providerRep.setHideOnLogin(identityProviderModel.isHideOnLogin());
         providerRep.setStoreToken(identityProviderModel.isStoreToken());
         providerRep.setTrustEmail(identityProviderModel.isTrustEmail());
         providerRep.setAuthenticateByDefault(identityProviderModel.isAuthenticateByDefault());
@@ -818,6 +858,10 @@ public class ModelToRepresentation {
                 throw new ModelException("Couldn't find authentication flow with id " + postBrokerLoginFlowId);
             }
             providerRep.setPostBrokerLoginFlowAlias(flow.getAlias());
+        }
+
+        if (!export) {
+            providerRep.setOrganizationId(identityProviderModel.getOrganizationId());
         }
 
         return providerRep;
@@ -892,6 +936,19 @@ public class ModelToRepresentation {
         }
         rep.setPriority(model.getPriority());
         rep.setRequirement(model.getRequirement().name());
+        return rep;
+    }
+
+    public static AuthenticationExecutionRepresentation toRepresentation(AuthenticationExecutionModel model) {
+        AuthenticationExecutionRepresentation rep = new AuthenticationExecutionRepresentation();
+        rep.setId(model.getId());
+        rep.setAuthenticatorConfig(model.getAuthenticatorConfig());
+        rep.setAuthenticator(model.getAuthenticator());
+        rep.setFlowId(model.getFlowId());
+        rep.setAuthenticatorFlow(model.isAuthenticatorFlow());
+        rep.setRequirement(model.getRequirement().name());
+        rep.setPriority(model.getPriority());
+        rep.setParentFlow(model.getParentFlow());
         return rep;
     }
 

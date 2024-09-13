@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   NumberControl,
   SelectControl,
+  TextAreaControl,
   TextControl,
 } from "@keycloak/keycloak-ui-shared";
 import { DefaultSwitchControl } from "../../components/SwitchControl";
@@ -71,12 +72,18 @@ const Fields = ({ readOnly }: DescriptorSettingsProps) => {
           rules={{ required: t("required") }}
         />
         <TextControl
+          name="config.artifactResolutionServiceUrl"
+          label={t("artifactResolutionServiceUrl")}
+          labelIcon={t("artifactResolutionServiceUrlHelp")}
+          type="url"
+          isDisabled={readOnly}
+        />
+        <TextControl
           name="config.singleLogoutServiceUrl"
           label={t("singleLogoutServiceUrl")}
           labelIcon={t("singleLogoutServiceUrlHelp")}
           type="url"
           readOnly={readOnly}
-          rules={{ required: t("required") }}
         />
         <DefaultSwitchControl
           name="config.backchannelSupported"
@@ -170,6 +177,13 @@ const Fields = ({ readOnly }: DescriptorSettingsProps) => {
         <DefaultSwitchControl
           name="config.postBindingResponse"
           label={t("httpPostBindingResponse")}
+          isDisabled={readOnly}
+          stringify
+        />
+
+        <DefaultSwitchControl
+          name="config.artifactBindingResponse"
+          label={t("artifactBindingResponse")}
           isDisabled={readOnly}
           stringify
         />
@@ -282,11 +296,13 @@ const Fields = ({ readOnly }: DescriptorSettingsProps) => {
               name="config.useMetadataDescriptorUrl"
               label={t("useMetadataDescriptorUrl")}
               isDisabled={readOnly}
+              stringify
             />
             {useMetadataDescriptorUrl !== "true" && (
-              <TextControl
+              <TextAreaControl
                 name="config.signingCertificate"
                 label={t("validatingX509Certs")}
+                labelIcon={t("validatingX509CertsHelp")}
                 readOnly={readOnly}
               />
             )}

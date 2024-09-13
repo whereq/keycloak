@@ -50,7 +50,7 @@ import org.keycloak.validate.Validators;
 
 /**
  * Utility methods to work with User Profile Configurations
- * 
+ *
  * @author Vlastimil Elias <velias@redhat.com>
  *
  */
@@ -61,6 +61,7 @@ public class UPConfigUtils {
     public static final String ROLE_ADMIN = UserProfileConstants.ROLE_ADMIN;
 
     private static final Set<String> PSEUDOROLES = new HashSet<>();
+    public static final Pattern ATTRIBUTE_NAME_PATTERN = Pattern.compile("[a-zA-Z0-9\\._\\-]+");
 
     static {
         PSEUDOROLES.add(ROLE_ADMIN);
@@ -112,13 +113,13 @@ public class UPConfigUtils {
         errors.addAll(validateAttributeGroups(config));
         return errors;
     }
-    
+
     private static List<String> validateAttributeGroups(UPConfig config) {
         long groupsWithoutName = config.getGroups().stream().filter(g -> g.getName() == null).collect(Collectors.counting());
-        
+
         if (groupsWithoutName > 0) {
             String errorMessage = "Name is mandatory for groups, found " + groupsWithoutName + " group(s) without name.";
-            return Collections.singletonList(errorMessage);            
+            return Collections.singletonList(errorMessage);
         }
         return Collections.emptyList();
     }
@@ -128,13 +129,11 @@ public class UPConfigUtils {
         Set<String> groups = config.getGroups().stream()
                 .map(g -> g.getName())
                 .collect(Collectors.toSet());
-        
+
         if (config.getAttributes() != null) {
             Set<String> attNamesCache = new HashSet<>();
             config.getAttributes().forEach((attribute) -> validateAttribute(session, attribute, groups, errors, attNamesCache));
             errors.addAll(validateRootAttributes(config));
-        } else {
-            errors.add("UserProfile configuration without 'attributes' section is not allowed");
         }
 
         return errors;
@@ -200,13 +199,13 @@ public class UPConfigUtils {
         if (attributeConfig.getSelector() != null) {
             validateScopes(attributeConfig.getSelector().getScopes(), "selector.scopes", attributeName, errors, session);
         }
-        
+
         if (attributeConfig.getGroup() != null) {
             if (!groups.contains(attributeConfig.getGroup())) {
                 errors.add("Attribute '" + attributeName + "' references unknown group '" + attributeConfig.getGroup() + "'");
             }
         }
-        
+
         if (attributeConfig.getAnnotations()!=null) {
             validateAnnotations(attributeConfig.getAnnotations(), errors, attributeName);
         }
@@ -241,7 +240,7 @@ public class UPConfigUtils {
      * @return
      */
     public static boolean isValidAttributeName(String attributeName) {
-        return Pattern.matches("[a-zA-Z0-9\\._\\-]+", attributeName);
+        return ATTRIBUTE_NAME_PATTERN.matcher(attributeName).matches();
     }
 
     /**

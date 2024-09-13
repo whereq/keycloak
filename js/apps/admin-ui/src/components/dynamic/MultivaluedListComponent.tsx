@@ -1,9 +1,12 @@
-import { HelpItem } from "@keycloak/keycloak-ui-shared";
+import {
+  HelpItem,
+  KeycloakSelect,
+  SelectVariant,
+} from "@keycloak/keycloak-ui-shared";
 import { FormGroup, SelectOption } from "@patternfly/react-core";
 import { useState } from "react";
 import { Controller, useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { KeycloakSelect, SelectVariant } from "../select/KeycloakSelect";
 import { convertToName } from "./DynamicComponents";
 import type { ComponentProps } from "./components";
 
@@ -39,7 +42,9 @@ export const MultiValuedListComponent = ({
       <Controller
         name={convertToName(name!)}
         control={control}
-        defaultValue={defaultValue ? [defaultValue] : []}
+        defaultValue={
+          stringify ? defaultValue || "" : defaultValue ? [defaultValue] : []
+        }
         render={({ field }) => (
           <KeycloakSelect
             toggleId={name}

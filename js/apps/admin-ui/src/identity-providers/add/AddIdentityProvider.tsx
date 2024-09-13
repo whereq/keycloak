@@ -10,7 +10,7 @@ import { FormProvider, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Link, useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { DynamicComponents } from "../../components/dynamic/DynamicComponents";
 import { FormAccess } from "../../components/form/FormAccess";
 import { ViewHeader } from "../../components/view-header/ViewHeader";
@@ -62,14 +62,14 @@ export default function AddIdentityProvider() {
       await adminClient.identityProviders.create({
         ...provider,
         providerId,
-        alias: providerId,
+        alias: provider.alias!,
       });
       addAlert(t("createIdentityProviderSuccess"), AlertVariant.success);
       navigate(
         toIdentityProvider({
           realm,
           providerId,
-          alias: providerId,
+          alias: provider.alias!,
           tab: "settings",
         }),
       );
@@ -77,6 +77,12 @@ export default function AddIdentityProvider() {
       addError("createError", error);
     }
   };
+
+  const alias = form.getValues("alias");
+
+  if (!alias) {
+    form.setValue("alias", providerId);
+  }
 
   return (
     <>

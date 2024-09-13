@@ -17,7 +17,7 @@ import { Link } from "react-router-dom";
 import { useAdminClient } from "../admin-client";
 import type { Row } from "../clients/scopes/ClientScopes";
 import { getProtocolName } from "../clients/utils";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import {
   AllClientScopeType,
   AllClientScopes,
@@ -28,10 +28,7 @@ import {
   removeScope,
 } from "../components/client-scope/ClientScopeTypes";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import {
-  Action,
-  KeycloakDataTable,
-} from "../components/table-toolbar/KeycloakDataTable";
+import { Action, KeycloakDataTable } from "@keycloak/keycloak-ui-shared";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { useRealm } from "../context/realm-context/RealmContext";
 import helpUrls from "../help-urls";
@@ -183,7 +180,7 @@ export default function ClientScopesSection() {
           addError("deleteErrorClientScope", error);
         }
       } else {
-        addError(t("notAllowedToDeleteAllClientScopes"), "error");
+        addAlert(t("notAllowedToDeleteAllClientScopes"), AlertVariant.danger);
       }
     },
   });
@@ -257,6 +254,7 @@ export default function ClientScopesSection() {
               <ToolbarItem>
                 <Dropdown
                   shouldFocusToggleOnSelect
+                  onOpenChange={(isOpen) => setKebabOpen(isOpen)}
                   toggle={(ref) => (
                     <MenuToggle
                       data-testid="kebab"

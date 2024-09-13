@@ -1,15 +1,14 @@
 import {
-  AccountEnvironment,
   UserProfileFields,
   beerify,
   debeerify,
   setUserProfileServerError,
-  useAlerts,
   useEnvironment,
 } from "@keycloak/keycloak-ui-shared";
 import {
   ActionGroup,
   Alert,
+  AlertVariant,
   Button,
   ExpandableSection,
   Form,
@@ -20,6 +19,7 @@ import { TFunction } from "i18next";
 import { useState } from "react";
 import { ErrorOption, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+
 import {
   getPersonalInfo,
   getSupportedLocales,
@@ -30,18 +30,20 @@ import {
   UserRepresentation,
 } from "../api/representations";
 import { Page } from "../components/page/Page";
+import type { Environment } from "../environment";
 import { TFuncKey, i18n } from "../i18n";
+import { useAccountAlerts } from "../utils/useAccountAlerts";
 import { usePromise } from "../utils/usePromise";
 
 export const PersonalInfo = () => {
   const { t } = useTranslation();
-  const context = useEnvironment<AccountEnvironment>();
+  const context = useEnvironment<Environment>();
   const [userProfileMetadata, setUserProfileMetadata] =
     useState<UserProfileMetadata>();
   const [supportedLocales, setSupportedLocales] = useState<string[]>([]);
   const form = useForm<UserRepresentation>({ mode: "onChange" });
   const { handleSubmit, reset, setValue, setError } = form;
-  const { addAlert, addError } = useAlerts();
+  const { addAlert } = useAccountAlerts();
 
   usePromise(
     (signal) =>
@@ -69,15 +71,16 @@ export const PersonalInfo = () => {
       );
       await savePersonalInfo(context, { ...user, attributes });
       const locale = attributes["locale"]?.toString();
-      i18n.changeLanguage(locale, (error) => {
-        if (error) {
-          console.warn("Error(s) loading locale", locale, error);
-        }
-      });
+      if (locale)
+        i18n.changeLanguage(locale, (error) => {
+          if (error) {
+            console.warn("Error(s) loading locale", locale, error);
+          }
+        });
       context.keycloak.updateToken();
       addAlert(t("accountUpdatedMessage"));
     } catch (error) {
-      addError(t("accountUpdatedError").toString());
+      addAlert(t("accountUpdatedError"), AlertVariant.danger);
 
       setUserProfileServerError(
         { responseData: { errors: error as any } },
@@ -91,6 +94,11 @@ export const PersonalInfo = () => {
   if (!userProfileMetadata) {
     return <Spinner />;
   }
+
+  const allFieldsReadOnly = () =>
+    userProfileMetadata?.attributes
+      ?.map((a) => a.readOnly)
+      .reduce((p, c) => p && c, true);
 
   const {
     updateEmailFeatureEnabled,
@@ -129,24 +137,26 @@ export const PersonalInfo = () => {
             ) : undefined
           }
         />
-        <ActionGroup>
-          <Button
-            data-testid="save"
-            type="submit"
-            id="save-btn"
-            variant="primary"
-          >
-            {t("save")}
-          </Button>
-          <Button
-            data-testid="cancel"
-            id="cancel-btn"
-            variant="link"
-            onClick={() => reset()}
-          >
-            {t("cancel")}
-          </Button>
-        </ActionGroup>
+        {!allFieldsReadOnly() && (
+          <ActionGroup>
+            <Button
+              data-testid="save"
+              type="submit"
+              id="save-btn"
+              variant="primary"
+            >
+              {t("save")}
+            </Button>
+            <Button
+              data-testid="cancel"
+              id="cancel-btn"
+              variant="link"
+              onClick={() => reset()}
+            >
+              {t("cancel")}
+            </Button>
+          </ActionGroup>
+        )}
         {context.environment.features.deleteAccountAllowed && (
           <ExpandableSection
             data-testid="delete-account"

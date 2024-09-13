@@ -19,7 +19,6 @@ package org.keycloak.organization.jpa;
 
 import static java.util.Optional.ofNullable;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
@@ -31,6 +30,7 @@ import java.util.stream.Stream;
 
 import org.keycloak.models.GroupModel;
 import org.keycloak.models.IdentityProviderModel;
+import org.keycloak.models.KeycloakSession;
 import org.keycloak.models.ModelValidationException;
 import org.keycloak.models.OrganizationDomainModel;
 import org.keycloak.models.OrganizationModel;
@@ -46,13 +46,15 @@ import org.keycloak.utils.StringUtil;
 
 public final class OrganizationAdapter implements OrganizationModel, JpaModel<OrganizationEntity> {
 
+    private final KeycloakSession session;
     private final RealmModel realm;
     private final OrganizationEntity entity;
     private final OrganizationProvider provider;
     private GroupModel group;
     private Map<String, List<String>> attributes;
 
-    public OrganizationAdapter(RealmModel realm, OrganizationProvider provider) {
+    public OrganizationAdapter(KeycloakSession session, RealmModel realm, OrganizationProvider provider) {
+        this.session = session;
         entity = new OrganizationEntity();
         entity.setId(KeycloakModelUtils.generateId());
         entity.setRealmId(realm.getId());
@@ -60,7 +62,8 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
         this.provider = provider;
     }
 
-    public OrganizationAdapter(RealmModel realm, OrganizationEntity entity, OrganizationProvider provider) {
+    public OrganizationAdapter(KeycloakSession session, RealmModel realm, OrganizationEntity entity, OrganizationProvider provider) {
+        this.session = session;
         this.realm = realm;
         this.entity = entity;
         this.provider = provider;
@@ -75,7 +78,7 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
         return realm;
     }
 
-    String getGroupId() {
+    public String getGroupId() {
         return entity.getGroupId();
     }
 
@@ -91,6 +94,25 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
     @Override
     public String getName() {
         return entity.getName();
+    }
+
+    @Override
+    public String getAlias() {
+        return entity.getAlias();
+    }
+
+    @Override
+    public void setAlias(String alias) {
+        if (StringUtil.isBlank(alias)) {
+            alias = getName();
+        }
+        if (alias.equals(entity.getAlias())) {
+            return;
+        }
+        if (StringUtil.isNotBlank(entity.getAlias())) {
+            throw new ModelValidationException("Cannot change the alias");
+        }
+        entity.setAlias(alias);
     }
 
     @Override
@@ -118,20 +140,29 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
         if (attributes == null) {
             return;
         }
-        // make sure the kc.org attribute is never removed or updated
-        attributes.put(ORGANIZATION_ATTRIBUTE, getGroup().getAttributes().get(OrganizationModel.ORGANIZATION_ATTRIBUTE));
-        Set<String> attrsToRemove = getAttributes().keySet();
-        attrsToRemove.removeAll(attributes.keySet());
-        attrsToRemove.forEach(group::removeAttribute);
-        attributes.forEach(group::setAttribute);
+
+        // add organization to the session as the following code updates the underlying group
+        OrganizationModel current = (OrganizationModel) session.getAttribute(OrganizationModel.class.getName());
+        if (current == null) {
+            session.setAttribute(OrganizationModel.class.getName(), this);
+        }
+
+        try {
+            Set<String> attrsToRemove = getAttributes().keySet();
+            attrsToRemove.removeAll(attributes.keySet());
+            attrsToRemove.forEach(group::removeAttribute);
+            attributes.forEach(group::setAttribute);
+        } finally {
+            if (current == null) {
+                session.removeAttribute(OrganizationModel.class.getName());
+            }
+        }
     }
 
     @Override
     public Map<String, List<String>> getAttributes() {
         if (attributes == null) {
-            attributes = new HashMap<>(ofNullable(getGroup().getAttributes()).orElse(Map.of()));
-            // do not expose the kc.org attribute
-            attributes.remove(OrganizationModel.ORGANIZATION_ATTRIBUTE);
+            attributes = ofNullable(getGroup().getAttributes()).orElse(Map.of());
         }
         return attributes;
     }
@@ -164,7 +195,7 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
                         .filter(idp -> Objects.equals(domainEntity.getName(), idp.getConfig().get(ORGANIZATION_DOMAIN_ATTRIBUTE)))
                         .forEach(idp -> {
                             idp.getConfig().remove(ORGANIZATION_DOMAIN_ATTRIBUTE);
-                            realm.updateIdentityProvider(idp);
+                            session.identityProviders().update(idp);
                         });
             }
         }
@@ -188,6 +219,11 @@ public final class OrganizationAdapter implements OrganizationModel, JpaModel<Or
     @Override
     public boolean isManaged(UserModel user) {
         return provider.isManagedMember(this, user);
+    }
+
+    @Override
+    public boolean isMember(UserModel user) {
+        return provider.isMember(this, user);
     }
 
     @Override

@@ -20,6 +20,7 @@ import org.hamcrest.Matchers;
 import org.junit.Assert;
 import org.junit.Test;
 import org.keycloak.common.Profile;
+import org.keycloak.common.util.MultiSiteUtils;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.Constants;
@@ -66,6 +67,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
     @Override
     public void createEnvironment(KeycloakSession s) {
         RealmModel realm = createRealm(s, "test");
+        s.getContext().setRealm(realm);
         realm.setOfflineSessionIdleTimeout(Constants.DEFAULT_OFFLINE_SESSION_IDLE_TIMEOUT);
         realm.setDefaultRole(s.roles().addRealmRole(realm, Constants.DEFAULT_ROLES_ROLE_PREFIX + "-" + realm.getName()));
         realm.setSsoSessionIdleTimeout(1800);
@@ -82,6 +84,8 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
 
     @Override
     public void cleanEnvironment(KeycloakSession s) {
+        RealmModel realm = s.realms().getRealm(realmId);
+        s.getContext().setRealm(realm);
         s.realms().removeRealm(realmId);
     }
 
@@ -91,6 +95,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
 
         inComittedTransaction(session -> {
             RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
 
             UserSessionModel userSession = session.sessions().getUserSession(realm, origSessions[0].getId());
             Assert.assertEquals(origSessions[0], userSession);
@@ -101,6 +106,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
 
         inComittedTransaction(session -> {
             RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
 
             session.sessions().removeUserSession(realm, session.sessions().getUserSession(realm, origSessions[0].getId()));
             session.sessions().removeUserSession(realm, session.sessions().getUserSession(realm, origSessions[1].getId()));
@@ -108,6 +114,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
 
         inComittedTransaction(session -> {
             RealmModel realm = session.realms().getRealm(realmId);
+            session.getContext().setRealm(realm);
 
             UserSessionModel userSession = session.sessions().getUserSession(realm, origSessions[0].getId());
             Assert.assertNull(userSession);
@@ -123,7 +130,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
         //  skip for persistent user sessions as the periodic task is not used there
         TimerProvider timer = kcSession.getProvider(TimerProvider.class);
         TimerProvider.TimerTaskContext timerTaskCtx = null;
-        if (timer != null && !Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS)) {
+        if (timer != null && !MultiSiteUtils.isPersistentSessionsEnabled()) {
             timerTaskCtx = timer.cancelTask(PersisterLastSessionRefreshStoreFactory.DB_LSR_PERIODIC_TASK_NAME);
             log.info("Cancelled periodic task " + PersisterLastSessionRefreshStoreFactory.DB_LSR_PERIODIC_TASK_NAME);
         }
@@ -175,7 +182,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
             setTimeOffset(0);
             kcSession.getKeycloakSessionFactory().publish(new ResetTimeOffsetEvent());
             // Enable periodic task again, skip for persistent user sessions as the periodic task is not used there
-            if (timer != null && timerTaskCtx != null && !Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS)) {
+            if (timer != null && timerTaskCtx != null && !MultiSiteUtils.isPersistentSessionsEnabled()) {
                 timer.schedule(timerTaskCtx.getRunnable(), timerTaskCtx.getIntervalMillis(), PersisterLastSessionRefreshStoreFactory.DB_LSR_PERIODIC_TASK_NAME);
             }
 
@@ -191,7 +198,7 @@ public class UserSessionProviderModelTest extends KeycloakModelTest {
 
             ClientModel testApp = realm.getClientByClientId("test-app");
             AuthenticatedClientSessionModel clientSession = session.sessions().createClientSession(realm, testApp, userSession);
-            
+
             // assert the client sessions are present
             assertThat(session.sessions().getClientSession(userSession, testApp, clientSession.getId(), false), notNullValue());
             return userSession.getId();

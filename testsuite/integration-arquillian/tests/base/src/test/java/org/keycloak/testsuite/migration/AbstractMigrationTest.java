@@ -41,6 +41,7 @@ import org.keycloak.models.AccountRoles;
 import org.keycloak.models.AdminRoles;
 import org.keycloak.models.AuthenticationExecutionModel;
 import org.keycloak.models.Constants;
+import org.keycloak.models.IdentityProviderModel;
 import org.keycloak.models.LDAPConstants;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.DefaultAuthenticationFlows;
@@ -58,6 +59,7 @@ import org.keycloak.representations.idm.AuthenticationFlowRepresentation;
 import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.ClientScopeRepresentation;
 import org.keycloak.representations.idm.ComponentRepresentation;
+import org.keycloak.representations.idm.IdentityProviderRepresentation;
 import org.keycloak.representations.idm.KeysMetadataRepresentation;
 import org.keycloak.representations.idm.MappingsRepresentation;
 import org.keycloak.representations.idm.ProtocolMapperRepresentation;
@@ -106,6 +108,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasEntry;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -174,7 +177,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
     protected void testRhssoThemes(RealmResource realm) {
         // check themes are removed
         RealmRepresentation rep = realm.toRepresentation();
-        Assert.assertNull("Login theme was not modified", rep.getLoginTheme());
+        assertThat("Login theme modified for test purposes", rep.getLoginTheme(), anyOf(nullValue(), equalTo(PREFERRED_DEFAULT_LOGIN_THEME)));
         Assert.assertNull("Email theme was not modified", rep.getEmailTheme());
         // there should be either new default or left null if not set
         assertThat("Account theme was not modified", rep.getAccountTheme(), anyOf(equalTo("keycloak.v2"), nullValue()));
@@ -427,6 +430,15 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         testClientContainsExpectedClientScopes();
     }
 
+    protected void testMigrationTo26_0_0(boolean testIdentityProviderConfigMigration) {
+        if (testIdentityProviderConfigMigration) {
+            testIdentityProviderConfigMigration(migrationRealm2);
+        }
+        testLightweightClientAndFullScopeAllowed(masterRealm, Constants.ADMIN_CONSOLE_CLIENT_ID);
+        testLightweightClientAndFullScopeAllowed(masterRealm, Constants.ADMIN_CLI_CLIENT_ID);
+        testLightweightClientAndFullScopeAllowed(migrationRealm, Constants.ADMIN_CONSOLE_CLIENT_ID);
+        testLightweightClientAndFullScopeAllowed(migrationRealm, Constants.ADMIN_CLI_CLIENT_ID);
+    }
 
     private void testClientContainsExpectedClientScopes() {
         // Test OIDC client contains expected client scopes
@@ -440,6 +452,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
 
         assertThat(defaultClientScopes, Matchers.hasItems(
                 OIDCLoginProtocolFactory.BASIC_SCOPE,
+                OIDCLoginProtocolFactory.ACR_SCOPE,
                 OAuth2Constants.SCOPE_PROFILE,
                 OAuth2Constants.SCOPE_EMAIL
         ));
@@ -1188,9 +1201,9 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
     protected void testDefaultRoles(RealmResource realm) {
         String realmName = realm.toRepresentation().getRealm().toLowerCase();
         assertThat(realm.roles().get("default-roles-" + realmName).getRoleComposites().stream()
-                .map(RoleRepresentation::getName).collect(Collectors.toSet()), 
+                .map(RoleRepresentation::getName).collect(Collectors.toSet()),
             allOf(
-                hasItem(realmName + "-test-realm-role"), 
+                hasItem(realmName + "-test-realm-role"),
                 hasItem(realmName + "-test-client-role"))
             );
     }
@@ -1216,7 +1229,7 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
 
         realm.clients().findByClientId("migration-saml-client")
           .forEach(clientRepresentation -> {
-                assertThat(clientRepresentation.getAttributes(), hasEntry("extremely_long_attribute", 
+                assertThat(clientRepresentation.getAttributes(), hasEntry("extremely_long_attribute",
                       "     00000     00010     00020     00030     00040     00050     00060     00070     00080     00090"
                     + "     00100     00110     00120     00130     00140     00150     00160     00170     00180     00190"
                     + "     00200     00210     00220     00230     00240     00250     00260     00270     00280     00290"
@@ -1334,5 +1347,18 @@ public abstract class AbstractMigrationTest extends AbstractKeycloakTest {
         assertEquals(100, rep.getPriority());
         assertTrue(rep.isEnabled());
         assertFalse(rep.isDefaultAction());
+    }
+
+    private void testIdentityProviderConfigMigration(final RealmResource realm) {
+        IdentityProviderRepresentation rep = realm.identityProviders().get("gitlab").toRepresentation();
+        // gitlab identity provider should have it's hideOnLoginPage attribute migrated from the config to the provider itself.
+        assertThat(rep.isHideOnLogin(), is(true));
+        assertThat(rep.getConfig().containsKey(IdentityProviderModel.LEGACY_HIDE_ON_LOGIN_ATTR), is(false));
+    }
+
+    private void testLightweightClientAndFullScopeAllowed(RealmResource realm, String clientId) {
+        ClientRepresentation clientRepresentation = realm.clients().findByClientId(clientId).get(0);
+        assertTrue(clientRepresentation.isFullScopeAllowed());
+        assertTrue(Boolean.parseBoolean(clientRepresentation.getAttributes().get(Constants.USE_LIGHTWEIGHT_ACCESS_TOKEN_ENABLED)));
     }
 }

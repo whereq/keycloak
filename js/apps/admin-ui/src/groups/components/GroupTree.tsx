@@ -3,32 +3,34 @@ import {
   AlertVariant,
   Button,
   Checkbox,
+  Divider,
+  Dropdown,
+  DropdownItem,
+  DropdownList,
   InputGroup,
   InputGroupItem,
+  MenuToggle,
   Spinner,
   Tooltip,
   TreeView,
   TreeViewDataItem,
-  Dropdown,
-  MenuToggle,
-  DropdownList,
-  Divider,
-  DropdownItem,
 } from "@patternfly/react-core";
 
+import {
+  PaginatingTableToolbar,
+  useAlerts,
+  useFetch,
+} from "@keycloak/keycloak-ui-shared";
 import { AngleRightIcon, EllipsisVIcon } from "@patternfly/react-icons";
 import { unionBy } from "lodash-es";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAdminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
-import { KeycloakSpinner } from "../../components/keycloak-spinner/KeycloakSpinner";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
+import { KeycloakSpinner } from "@keycloak/keycloak-ui-shared";
 import { useAccess } from "../../context/access/Access";
 import { fetchAdminUI } from "../../context/auth/admin-ui-endpoint";
 import { useRealm } from "../../context/realm-context/RealmContext";
-import { useFetch } from "../../utils/useFetch";
 import useToggle from "../../utils/useToggle";
 import { GroupsModal } from "../GroupsModal";
 import { useSubGroups } from "../SubGroupsContext";
@@ -107,6 +109,7 @@ const GroupTreeContextMenu = ({
         popperProps={{
           position: "right",
         }}
+        onOpenChange={toggleOpen}
         toggle={(ref) => (
           <MenuToggle
             ref={ref}
@@ -147,6 +150,21 @@ type GroupTreeProps = {
 
 const SUBGROUP_COUNT = 50;
 
+const TreeLoading = () => {
+  const { t } = useTranslation();
+  return (
+    <>
+      <Spinner size="sm" /> {t("spinnerLoading")}
+    </>
+  );
+};
+
+const LOADING_TREE = [
+  {
+    name: <TreeLoading />,
+  },
+];
+
 export const GroupTree = ({
   refresh: viewRefresh,
   canViewDetails,
@@ -183,6 +201,7 @@ export const GroupTree = ({
     group: GroupRepresentation,
     refresh: () => void,
   ): ExtendedTreeViewDataItem => {
+    const hasSubGroups = group.subGroupCount;
     return {
       id: group.id,
       name: (
@@ -191,16 +210,10 @@ export const GroupTree = ({
         </Tooltip>
       ),
       access: group.access || {},
-      children: group.subGroupCount
-        ? [
-            {
-              name: (
-                <>
-                  <Spinner size="sm" /> {t("spinnerLoading")}
-                </>
-              ),
-            },
-          ]
+      children: hasSubGroups
+        ? search.length === 0
+          ? LOADING_TREE
+          : group.subGroups?.map((g) => mapGroup(g, refresh))
         : undefined,
       action: (hasAccess("manage-users") || group.access?.manage) && (
         <GroupTreeContextMenu group={group} refresh={refresh} />

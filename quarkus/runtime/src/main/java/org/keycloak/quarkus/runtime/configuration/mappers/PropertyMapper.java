@@ -24,10 +24,13 @@ import static org.keycloak.quarkus.runtime.configuration.Configuration.toCliForm
 import static org.keycloak.quarkus.runtime.configuration.Configuration.toEnvVarFormat;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 import io.smallrye.config.ConfigSourceInterceptorContext;
 import io.smallrye.config.ConfigValue;
@@ -56,6 +59,7 @@ public class PropertyMapper<T> {
             null,
             null,
             false,
+            null,
             null) {
         @Override
         public ConfigValue getConfigValue(String name, ConfigSourceInterceptorContext context) {
@@ -74,10 +78,12 @@ public class PropertyMapper<T> {
     private final String envVarFormat;
     private final String cliFormat;
     private final BiConsumer<PropertyMapper<T>, ConfigValue> validator;
+    private final String description;
 
     PropertyMapper(Option<T> option, String to, BooleanSupplier enabled, String enabledWhen,
                    BiFunction<Optional<String>, ConfigSourceInterceptorContext, Optional<String>> mapper,
-                   String mapFrom, String paramLabel, boolean mask, BiConsumer<PropertyMapper<T>, ConfigValue> validator) {
+                   String mapFrom, String paramLabel, boolean mask, BiConsumer<PropertyMapper<T>, ConfigValue> validator,
+                   String description) {
         this.option = option;
         this.to = to == null ? getFrom() : to;
         this.enabled = enabled;
@@ -89,6 +95,7 @@ public class PropertyMapper<T> {
         this.cliFormat = toCliFormat(option.getKey());
         this.envVarFormat = toEnvVarFormat(getFrom());
         this.validator = validator;
+        this.description = description;
     }
 
     private static Optional<String> defaultTransformer(Optional<String> value, ConfigSourceInterceptorContext context) {
@@ -190,11 +197,21 @@ public class PropertyMapper<T> {
     }
 
     public String getDescription() {
-        return this.option.getDescription();
+        return this.description;
     }
 
+    /**
+     * If {@link #isStrictExpectedValues()} is false, custom values can be provided
+     * Otherwise, only specified expected values can be used.
+     *
+     * @return expected values
+     */
     public List<String> getExpectedValues() {
         return this.option.getExpectedValues();
+    }
+
+    public boolean isStrictExpectedValues() {
+        return this.option.isStrictExpectedValues();
     }
 
     public Optional<T> getDefaultValue() { return this.option.getDefaultValue(); }
@@ -283,10 +300,12 @@ public class PropertyMapper<T> {
         private BooleanSupplier isEnabled = () -> true;
         private String enabledWhen = "";
         private String paramLabel;
-        private BiConsumer<PropertyMapper<T>, ConfigValue> validator = (mapper, value) -> mapper.validateExpectedValues(value, mapper::validateSingleValue);
+        private BiConsumer<PropertyMapper<T>, ConfigValue> validator = (mapper, value) -> mapper.validateValues(value, mapper::validateExpectedValues);
+        private String description;
 
         public Builder(Option<T> option) {
             this.option = option;
+            this.description = this.option.getDescription();
         }
 
         public Builder<T> to(String to) {
@@ -301,6 +320,11 @@ public class PropertyMapper<T> {
 
         public Builder<T> paramLabel(String label) {
             this.paramLabel = label;
+            return this;
+        }
+
+        public Builder<T> mapFrom(Option<?> mapFrom) {
+            this.mapFrom = mapFrom.getKey();
             return this;
         }
 
@@ -325,8 +349,49 @@ public class PropertyMapper<T> {
             return this;
         }
 
-        public Builder<T> validator(BiConsumer<PropertyMapper<T>, ConfigValue> validator) {
-            this.validator = validator;
+        /**
+         * Set the validator, overwriting the current one.
+         */
+        public Builder<T> validator(Consumer<String> validator) {
+            this.validator = (mapper, value) -> mapper.validateValues(value,
+                    (c, v) -> validator.accept(v));
+            if (!Objects.equals(this.description, this.option.getDescription())) {
+                throw new AssertionError("Overwriting the validator will cause the description modification from addValidateEnabled to be incorrect.");
+            }
+            return this;
+        }
+        
+        public Builder<T> addValidator(BiConsumer<PropertyMapper<T>, ConfigValue> validator) {
+            var current = this.validator;
+            this.validator = (mapper, value) -> {
+                Stream.of(current, validator).map(v -> {
+                    try {
+                        v.accept(mapper, value);
+                        return Optional.<PropertyException>empty();
+                    } catch (PropertyException e) {
+                        return Optional.of(e);
+                    }
+                }).flatMap(Optional::stream)
+                        .reduce((e1, e2) -> new PropertyException(String.format("%s.\n%s", e1.getMessage(), e2.getMessage())))
+                        .ifPresent(e -> {
+                            throw e;
+                        });
+            };
+            return this;
+        }
+        
+        /**
+         * Similar to {@link #enabledWhen}, but uses the condition as a validator that is added to the current one. This allows the option
+         * to appear in help. 
+         * @return
+         */
+        public Builder<T> addValidateEnabled(BooleanSupplier isEnabled, String enabledWhen) {
+            this.addValidator((mapper, value) -> {
+                if (!isEnabled.getAsBoolean()) {
+                    throw new PropertyException(mapper.getOption().getKey() + " available only when " + enabledWhen);
+                }
+            });
+            this.description = String.format("%s Available only when %s.", this.description, enabledWhen);
             return this;
         }
 
@@ -334,7 +399,7 @@ public class PropertyMapper<T> {
             if (paramLabel == null && Boolean.class.equals(option.getType())) {
                 paramLabel = Boolean.TRUE + "|" + Boolean.FALSE;
             }
-            return new PropertyMapper<T>(option, to, isEnabled, enabledWhen, mapper, mapFrom, paramLabel, isMasked, validator);
+            return new PropertyMapper<T>(option, to, isEnabled, enabledWhen, mapper, mapFrom, paramLabel, isMasked, validator, description);
         }
     }
 
@@ -348,18 +413,34 @@ public class PropertyMapper<T> {
         }
     }
 
-    public void validateExpectedValues(ConfigValue configValue, BiConsumer<ConfigValue, String> singleValidator) {
+    public void validateValues(ConfigValue configValue, BiConsumer<ConfigValue, String> singleValidator) {
         String value = configValue.getValue();
 
         boolean multiValued = getOption().getType() == java.util.List.class;
+        StringBuilder result = new StringBuilder();
 
         String[] values = multiValued ? value.split(",") : new String[] { value };
         for (String v : values) {
             if (multiValued && !v.trim().equals(v)) {
-                throw new PropertyException("Invalid value for multivalued option " + getOptionAndSourceMessage(configValue)
+                if (!result.isEmpty()) {
+                    result.append(".\n");
+                }
+                result.append("Invalid value for multivalued option " + getOptionAndSourceMessage(configValue)
                         + ": list value '" + v + "' should not have leading nor trailing whitespace");
+                continue;
             }
-            singleValidator.accept(configValue, v);
+            try {
+                singleValidator.accept(configValue, v);
+            } catch (PropertyException e) {
+                if (!result.isEmpty()) {
+                    result.append(".\n");
+                }
+                result.append(e.getMessage());
+            }
+        }
+        
+        if (!result.isEmpty()) {
+            throw new PropertyException(result.toString());
         }
     }
 
@@ -371,9 +452,9 @@ public class PropertyMapper<T> {
         return Optional.ofNullable(configValue.getConfigSourceName()).filter(name -> name.contains(KcEnvConfigSource.NAME)).isPresent();
     }
 
-    void validateSingleValue(ConfigValue configValue, String v) {
+    void validateExpectedValues(ConfigValue configValue, String v) {
         List<String> expectedValues = getExpectedValues();
-        if (!expectedValues.isEmpty() && !expectedValues.contains(v)) {
+        if (!expectedValues.isEmpty() && !expectedValues.contains(v) && getOption().isStrictExpectedValues()) {
             throw new PropertyException(
                     String.format("Invalid value for option %s: %s.%s", getOptionAndSourceMessage(configValue), v,
                             PropertyMapperParameterConsumer.getExpectedValuesMessage(expectedValues, expectedValues)));

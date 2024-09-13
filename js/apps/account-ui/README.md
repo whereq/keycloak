@@ -1,6 +1,6 @@
 # Keycloak Account UI
 
-This project is the next generation of the Keycloak Account UI. It is written with React and [PatternFly 4](https://www.patternfly.org/v4/) and uses [Vite](https://vitejs.dev/guide/).
+This project is the next generation of the Keycloak Account UI. It is written with React and [PatternFly](https://www.patternfly.org/) and uses [Vite](https://vitejs.dev/guide/).
 
 ## Features
 
@@ -17,12 +17,12 @@ npm i @keycloak/keycloak-account-ui
 To use these pages you'll need to add `KeycloakProvider` in your component hierarchy to setup what client, realm and url to use.
 
 ```jsx
-import { KeycloakProvider } from "@keycloak/keycloak-account-ui";
+import { KeycloakProvider } from "@keycloak/keycloak-ui-shared";
 
 //...
 
 <KeycloakProvider environment={{
-      authUrl: "http://localhost:8080",
+      serverBaseUrl: "http://localhost:8080",
       realm: "master",
       clientId: "security-admin-console"
   }}>

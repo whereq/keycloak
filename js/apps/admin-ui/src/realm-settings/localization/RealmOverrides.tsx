@@ -1,22 +1,29 @@
 import type RealmRepresentation from "@keycloak/keycloak-admin-client/lib/defs/realmRepresentation";
 import {
+  KeycloakSelect,
+  ListEmptyState,
+  PaginatingTableToolbar,
+  SelectVariant,
+  useAlerts,
+} from "@keycloak/keycloak-ui-shared";
+import {
   AlertVariant,
   Button,
   ButtonVariant,
   Divider,
+  Dropdown,
+  DropdownItem,
+  DropdownList,
   Form,
   FormGroup,
+  MenuToggle,
+  SelectGroup,
+  SelectOption,
   Text,
   TextContent,
   TextInput,
   TextVariants,
   ToolbarItem,
-  SelectGroup,
-  SelectOption,
-  Dropdown,
-  MenuToggle,
-  DropdownList,
-  DropdownItem,
 } from "@patternfly/react-core";
 import {
   CheckIcon,
@@ -41,20 +48,13 @@ import { ChangeEvent, useEffect, useState, type FormEvent } from "react";
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../../admin-client";
-import { useAlerts } from "../../components/alert/Alerts";
 import { useConfirmDialog } from "../../components/confirm-dialog/ConfirmDialog";
 import { KeyValueType } from "../../components/key-value-form/key-value-convert";
-import { ListEmptyState } from "../../components/list-empty-state/ListEmptyState";
-import { PaginatingTableToolbar } from "../../components/table-toolbar/PaginatingTableToolbar";
 import { useRealm } from "../../context/realm-context/RealmContext";
 import { useWhoAmI } from "../../context/whoami/WhoAmI";
-import { DEFAULT_LOCALE } from "../../i18n/i18n";
+import { DEFAULT_LOCALE, i18n } from "../../i18n/i18n";
 import { localeToDisplayName } from "../../util";
 import { AddTranslationModal } from "../AddTranslationModal";
-import {
-  KeycloakSelect,
-  SelectVariant,
-} from "../../components/select/KeycloakSelect";
 
 type RealmOverridesProps = {
   internationalizationEnabled: boolean;
@@ -140,7 +140,7 @@ export const RealmOverrides = ({
         }
 
         return Object.entries(result).slice(first, first + max);
-      } catch (error) {
+      } catch {
         return [];
       }
     };
@@ -221,9 +221,11 @@ export const RealmOverrides = ({
       refreshTable();
       translationForm.setValue("key", "");
       translationForm.setValue("value", "");
+      i18n.reloadResources();
+
       addAlert(t("addTranslationSuccess"), AlertVariant.success);
     } catch (error) {
-      addError(t("addTranslationError"), error);
+      addError("addTranslationError", error);
     }
   };
 
@@ -241,6 +243,12 @@ export const RealmOverrides = ({
     onConfirm: async () => {
       try {
         for (const key of selectedRowKeys) {
+          delete (
+            i18n.store.data[whoAmI.getLocale()][currentRealm] as Record<
+              string,
+              string
+            >
+          )[key];
           await adminClient.realms.deleteRealmLocalizationTexts({
             realm: currentRealm!,
             selectedLocale: selectMenuLocale,
@@ -250,6 +258,7 @@ export const RealmOverrides = ({
         setAreAllRowsSelected(false);
         setSelectedRowKeys([]);
         refreshTable();
+
         addAlert(t("deleteAllTranslationsSuccess"), AlertVariant.success);
       } catch (error) {
         addError("deleteAllTranslationsError", error);
@@ -312,11 +321,12 @@ export const RealmOverrides = ({
         },
         value,
       );
+      i18n.reloadResources();
 
       addAlert(t("updateTranslationSuccess"), AlertVariant.success);
       setTableRows(newRows);
     } catch (error) {
-      addAlert(t("updateTranslationError"), AlertVariant.danger);
+      addError("updateTranslationError", error);
     }
 
     setEditStates((prevEditStates) => ({
@@ -377,6 +387,7 @@ export const RealmOverrides = ({
             </Button>
             <ToolbarItem>
               <Dropdown
+                onOpenChange={(isOpen) => setKebabOpen(isOpen)}
                 toggle={(ref) => (
                   <MenuToggle
                     ref={ref}
@@ -590,8 +601,11 @@ export const RealmOverrides = ({
                             setSelectedRowKeys([
                               (row.cells?.[0] as IRowCell).props.value,
                             ]);
-                            translations.length === 1 &&
+
+                            if (translations.length === 1) {
                               setAreAllRowsSelected(true);
+                            }
+
                             toggleDeleteDialog();
                             setKebabOpen(false);
                           },

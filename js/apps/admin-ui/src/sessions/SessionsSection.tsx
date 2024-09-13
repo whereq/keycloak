@@ -1,4 +1,5 @@
 import UserSessionRepresentation from "@keycloak/keycloak-admin-client/lib/defs/userSessionRepresentation";
+import { KeycloakSelect } from "@keycloak/keycloak-ui-shared";
 import {
   DropdownItem,
   PageSection,
@@ -8,9 +9,8 @@ import { FilterIcon } from "@patternfly/react-icons";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import { useConfirmDialog } from "../components/confirm-dialog/ConfirmDialog";
-import { KeycloakSelect } from "../components/select/KeycloakSelect";
 import { ViewHeader } from "../components/view-header/ViewHeader";
 import { fetchAdminUI } from "../context/auth/admin-ui-endpoint";
 import { useRealm } from "../context/realm-context/RealmContext";

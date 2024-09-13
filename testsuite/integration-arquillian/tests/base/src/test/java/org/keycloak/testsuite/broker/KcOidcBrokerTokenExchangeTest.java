@@ -100,7 +100,7 @@ public final class KcOidcBrokerTokenExchangeTest extends AbstractInitializedBase
         OAuthClient.AccessTokenResponse tokenResponse = oauth.doGrantAccessTokenRequest(bc.providerRealmName(), bc.getUserLogin(), bc.getUserPassword(), null, brokerApp.getClientId(), brokerApp.getSecret());
         assertThat(tokenResponse.getIdToken(), notNullValue());
 
-        testingClient.server().run(KcOidcBrokerTokenExchangeTest::setupRealm);
+        testingClient.server(BrokerTestConstants.REALM_CONS_NAME).run(KcOidcBrokerTokenExchangeTest::setupRealm);
 
         ClientRepresentation client = consumerRealm.clients().findByClientId("test-app").get(0);
 
@@ -135,7 +135,7 @@ public final class KcOidcBrokerTokenExchangeTest extends AbstractInitializedBase
 
     @Test
     public void testSupportedTokenTypesWhenValidatingSubjectToken() throws Exception {
-        testingClient.server().run(KcOidcBrokerTokenExchangeTest::setupRealm);
+        testingClient.server(BrokerTestConstants.REALM_CONS_NAME).run(KcOidcBrokerTokenExchangeTest::setupRealm);
         RealmResource providerRealm = realmsResouce().realm(bc.providerRealmName());
         ClientsResource clients = providerRealm.clients();
         ClientRepresentation brokerApp = clients.findByClientId("brokerapp").get(0);
@@ -189,8 +189,8 @@ public final class KcOidcBrokerTokenExchangeTest extends AbstractInitializedBase
     }
 
     private static void setupRealm(KeycloakSession session) {
-        RealmModel realm = session.realms().getRealmByName(BrokerTestConstants.REALM_CONS_NAME);
-        IdentityProviderModel idp = realm.getIdentityProviderByAlias(IDP_OIDC_ALIAS);
+        RealmModel realm = session.getContext().getRealm();
+        IdentityProviderModel idp = session.identityProviders().getByAlias(IDP_OIDC_ALIAS);
         org.junit.Assert.assertNotNull(idp);
 
         ClientModel client = realm.addClient("test-app");

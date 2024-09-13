@@ -26,7 +26,6 @@ import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.hibernate.jpa.boot.spi.Bootstrap;
 import org.keycloak.connections.jpa.entityprovider.JpaEntityProvider;
-import org.keycloak.utils.ProxyClassLoader;
 import org.keycloak.models.KeycloakSession;
 
 import jakarta.persistence.EntityManager;
@@ -74,8 +73,7 @@ public class JpaUtils {
                 // to find and load the extra provided entities.
                 persistenceUnit.setTransactionType(txType);
                 persistenceUnit.setValidationMode(ValidationMode.NONE.name());
-                return Bootstrap.getEntityManagerFactoryBuilder(persistenceUnit, properties,
-                        new ProxyClassLoader(providedEntities)).build();
+                return Bootstrap.getEntityManagerFactoryBuilder(persistenceUnit, properties).build();
             }
         }
         throw new RuntimeException("Persistence unit '" + unitName + "' not found");
@@ -83,7 +81,7 @@ public class JpaUtils {
 
     /**
      * Get a list of all provided entities by looping over all configured entity providers.
-     * 
+     *
      * @param session the keycloak session
      * @return a list of all provided entities (can be an empty list)
      */
@@ -182,18 +180,15 @@ public class JpaUtils {
      */
     public static Properties loadSpecificNamedQueries(String databaseType) {
         URL specificUrl = JpaUtils.class.getClassLoader().getResource("META-INF/queries-" + databaseType + ".properties");
-        URL defaultUrl = JpaUtils.class.getClassLoader().getResource("META-INF/queries-default.properties");
-
-        if (defaultUrl == null) {
-            throw new IllegalStateException("META-INF/queries-default.properties was not found in the classpath");
-        }
 
         Properties specificQueries = loadSqlProperties(specificUrl);
-        Properties defaultQueries = loadSqlProperties(defaultUrl);
         Properties queries = new Properties();
+        if (specificQueries == null) {
+            return queries;
+        }
 
-        for (String queryNameFull : defaultQueries.stringPropertyNames()) {
-            String querySql = defaultQueries.getProperty(queryNameFull);
+        for (String queryNameFull : specificQueries.stringPropertyNames()) {
+            String querySql = specificQueries.getProperty(queryNameFull);
             String queryName = getQueryShortName(queryNameFull);
             String specificQueryNameFull = getQueryFromProperties(queryName, specificQueries);
 

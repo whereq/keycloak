@@ -24,9 +24,9 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 import static org.keycloak.client.cli.util.ConfigUtil.saveMergeConfig;
-import static org.keycloak.client.cli.util.IoUtil.readSecret;
 import static org.keycloak.client.cli.util.OsUtil.OS_ARCH;
 import static org.keycloak.client.cli.util.OsUtil.PROMPT;
+import static org.keycloak.common.util.IoUtils.readPasswordFromConsole;
 
 /**
  * @author <a href="mailto:mstrukel@redhat.com">Marko Strukelj</a>
@@ -78,7 +78,7 @@ public class BaseConfigTruststoreCmd extends BaseAuthOptionsCmd {
             }
 
             if ("-".equals(trustPass)) {
-                trustPass = readSecret("Enter truststore password: ");
+                trustPass = readPasswordFromConsole("truststore password");
             }
 
             pass = trustPass;
@@ -115,7 +115,7 @@ public class BaseConfigTruststoreCmd extends BaseAuthOptionsCmd {
         out.println();
         out.println("  Command specific options:");
         out.println("    TRUSTSTORE              Path to truststore file");
-        out.println("    --trustpass PASSWORD    Truststore password to unlock truststore (prompted for if set to '-')");
+        out.println("    --trustpass PASSWORD    Truststore password to unlock truststore (prompted for if set to '-'), defaults to the env variable KC_CLI_TRUSTSTORE_PASSWORD");
         out.println("    -d, --delete            Remove truststore configuration");
         out.println();
         out.println();

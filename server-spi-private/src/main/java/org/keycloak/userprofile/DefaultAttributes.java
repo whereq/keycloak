@@ -94,12 +94,12 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
 
     @Override
     public boolean isReadOnly(String name) {
-        if (!isManagedAttribute(name)) {
-            return !isAllowEditUnmanagedAttribute();
-        }
-
         if (isReadOnlyFromMetadata(name) || isReadOnlyInternalAttribute(name)) {
             return true;
+        }
+
+        if (!isManagedAttribute(name)) {
+            return !isAllowEditUnmanagedAttribute();
         }
 
         return getMetadata(name) == null;
@@ -333,11 +333,6 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
         }
 
         String providerId = user.getFederationLink();
-
-        if (providerId == null) {
-            providerId = StorageId.providerId(user.getId());
-        }
-
         UserProvider userProvider = session.users();
 
         if (userProvider instanceof UserProfileDecorator) {
@@ -459,7 +454,8 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
 
         Stream<String> valuesStream = Optional.ofNullable(values).orElse(EMPTY_VALUE).stream().filter(Objects::nonNull);
 
-        if (UserModel.USERNAME.equals(name) || UserModel.EMAIL.equals(name)) {
+        // do not normalize the username if a federated user because we need to respect the format from the external identity store
+        if ((UserModel.USERNAME.equals(name) && !isFederated()) || UserModel.EMAIL.equals(name)) {
             valuesStream = valuesStream.map(KeycloakModelUtils::toLowerCaseSafe);
         }
 
@@ -568,5 +564,9 @@ public class DefaultAttributes extends HashMap<String, List<String>> implements 
                         || (UnmanagedAttributePolicy.ADMIN_EDIT.equals(unmanagedAttributePolicy) && context.getContext().isAdminContext());
             }
         };
+    }
+
+    private boolean isFederated() {
+        return user != null && user.isFederated();
     }
 }

@@ -20,6 +20,7 @@ import io.fabric8.kubernetes.api.model.LocalObjectReference;
 import io.fabric8.kubernetes.api.model.ResourceRequirements;
 import io.fabric8.kubernetes.model.annotation.SpecReplicas;
 
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.BootstrapAdminSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.CacheSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.DatabaseSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.FeatureSpec;
@@ -28,6 +29,7 @@ import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpManagementSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.HttpSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.IngressSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.ProxySpec;
+import org.keycloak.operator.crds.v2alpha1.deployment.spec.SchedulingSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.TransactionsSpec;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.Truststore;
 import org.keycloak.operator.crds.v2alpha1.deployment.spec.UnsupportedSpec;
@@ -45,7 +47,7 @@ import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 public class KeycloakSpec {
 
     @SpecReplicas
-    @JsonPropertyDescription("Number of Keycloak instances in HA mode. Default is 1.")
+    @JsonPropertyDescription("Number of Keycloak instances. Default is 1.")
     private Integer instances;
 
     @JsonPropertyDescription("Custom Keycloak image to be used.")
@@ -109,6 +111,14 @@ public class KeycloakSpec {
     @JsonProperty("httpManagement")
     @JsonPropertyDescription("In this section you can configure Keycloak's management interface setting.")
     private HttpManagementSpec httpManagementSpec;
+
+    @JsonProperty("scheduling")
+    @JsonPropertyDescription("In this section you can configure Keycloak's scheduling")
+    private SchedulingSpec schedulingSpec;
+
+    @JsonProperty("bootstrapAdmin")
+    @JsonPropertyDescription("In this section you can configure Keycloak's bootstrap admin - will be used only for inital cluster creation.")
+    private BootstrapAdminSpec bootstrapAdminSpec;
 
     public HttpSpec getHttpSpec() {
         return httpSpec;
@@ -250,5 +260,21 @@ public class KeycloakSpec {
 
     public void setProxySpec(ProxySpec proxySpec) {
         this.proxySpec = proxySpec;
+    }
+
+    public SchedulingSpec getSchedulingSpec() {
+        return schedulingSpec;
+    }
+
+    public void setSchedulingSpec(SchedulingSpec schedulingSpec) {
+        this.schedulingSpec = schedulingSpec;
+    }
+    
+    public BootstrapAdminSpec getBootstrapAdminSpec() {
+        return bootstrapAdminSpec;
+    }
+
+    public void setBootstrapAdminSpec(BootstrapAdminSpec bootstrapAdminSpec) {
+        this.bootstrapAdminSpec = bootstrapAdminSpec;
     }
 }

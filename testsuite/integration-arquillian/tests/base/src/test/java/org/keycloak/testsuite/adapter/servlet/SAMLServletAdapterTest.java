@@ -192,7 +192,6 @@ import org.xml.sax.SAXException;
 /**
  * @author mhajas
  */
-@AppServerContainer(ContainerConstants.APP_SERVER_UNDERTOW)
 @AppServerContainer(ContainerConstants.APP_SERVER_WILDFLY)
 @AppServerContainer(ContainerConstants.APP_SERVER_EAP)
 @AppServerContainer(ContainerConstants.APP_SERVER_EAP8)
@@ -1820,9 +1819,7 @@ public class SAMLServletAdapterTest extends AbstractSAMLServletAdapterTest {
         Cookie identityCookie = driver.manage().getCookieNamed(CookieType.IDENTITY.getName());
         Assert.assertNotNull(identityCookie);
         driver.manage().deleteCookieNamed(CookieType.AUTH_SESSION_ID.getName());
-        driver.manage().deleteCookieNamed(CookieType.AUTH_SESSION_ID.getSameSiteLegacyName());
         driver.manage().addCookie(new Cookie(CookieType.AUTH_SESSION_ID.getName(), "invalid-value", identityCookie.getPath()));
-        driver.manage().addCookie(new Cookie(CookieType.AUTH_SESSION_ID.getSameSiteLegacyName(), "invalid-value", identityCookie.getPath()));
 
         // go back to the app page, re-login should work with the invalid cookie
         testRealmSAMLPostLoginPage.navigateTo();
@@ -1898,7 +1895,7 @@ public class SAMLServletAdapterTest extends AbstractSAMLServletAdapterTest {
             waitForPageToLoad();
             assertCurrentUrlStartsWith(testRealmSAMLPostLoginPage); // we are still in login
             Assert.assertEquals("Your login attempt timed out. Login will start from the beginning.",
-                    UIUtils.getTextFromElement(driver.findElement(By.className("alert-error"))));
+                    UIUtils.getTextFromElement(driver.findElement(By.cssSelector("div[class^='pf-v5-c-alert'], div[class^='alert-error']"))));
 
             // login successfully in tab2 after the error
             loginPage.form().login(bburkeUser);
@@ -1986,6 +1983,34 @@ public class SAMLServletAdapterTest extends AbstractSAMLServletAdapterTest {
 
         salesPostSigServletPage.logout();
         checkLoggedOut(salesPostSigEmailServletPage, testRealmSAMLPostLoginPage);
+    }
+
+    @Test
+    public void testChangeSessionID() throws Exception {
+        // login in the employeeDom application
+        assertSuccessfulLogin(employeeDomServletPage, bburkeUser, testRealmSAMLPostLoginPage, "principal=bburke");
+        assertSuccessfullyLoggedIn(employeeDomServletPage, "principal=bburke");
+        String sessionId = driver.manage().getCookieNamed("JSESSIONID").getValue();
+
+        // retrieve the saml document
+        driver.navigate().to(employeeDomServletPage.getUriBuilder().clone().path("getAssertionFromDocument").build().toURL());
+        waitForPageToLoad();
+        String xml = getRawPageSource();
+        Assert.assertNotEquals("", xml);
+
+        // change the session id
+        driver.navigate().to(employeeDomServletPage.getUriBuilder().clone().path("change-session-id").build().toURL());
+        waitForPageToLoad();
+        Assert.assertNotEquals("SessionID has not been changed at login", sessionId, driver.manage().getCookieNamed("JSESSIONID").getValue());
+
+        // retrieve again the saml document and should be the same as login should be maintained
+        driver.navigate().to(employeeDomServletPage.getUriBuilder().clone().path("getAssertionFromDocument").build().toURL());
+        waitForPageToLoad();
+        Assert.assertEquals(xml, getRawPageSource());
+
+        // logout
+        employeeDomServletPage.logout();
+        checkLoggedOut(employeeDomServletPage, testRealmSAMLPostLoginPage);
     }
 
     public static void printDocument(Source doc, OutputStream out) throws IOException, TransformerException {

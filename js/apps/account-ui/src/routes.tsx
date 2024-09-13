@@ -1,6 +1,8 @@
 import { lazy } from "react";
 import type { IndexRouteObject, RouteObject } from "react-router-dom";
-import { environment } from "@keycloak/keycloak-ui-shared";
+
+import { environment } from "./environment";
+import { Organizations } from "./organizations/Organizations";
 import { ErrorPage } from "./root/ErrorPage";
 import { Root } from "./root/Root";
 
@@ -58,6 +60,11 @@ export const PersonalInfoRoute: IndexRouteObject = {
   element: <PersonalInfo />,
 };
 
+export const OrganizationsRoute: RouteObject = {
+  path: "organizations",
+  element: <Organizations />,
+};
+
 export const Oid4VciRoute: RouteObject = {
   path: "oid4vci",
   element: <Oid4Vci />,
@@ -74,6 +81,7 @@ export const RootRoute: RouteObject = {
     SigningInRoute,
     ApplicationsRoute,
     GroupsRoute,
+    OrganizationsRoute,
     PersonalInfoRoute,
     ResourcesRoute,
     ContentRoute,

@@ -112,7 +112,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
     public void clear() {
         cache.clear();
         ClusterProvider cluster = session.getProvider(ClusterProvider.class);
-        cluster.notify(InfinispanUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, new ClearCacheEvent(), true, ClusterProvider.DCNotify.ALL_DCS);
+        cluster.notify(InfinispanUserCacheProviderFactory.USER_CLEAR_CACHE_EVENTS, ClearCacheEvent.getInstance(), true, ClusterProvider.DCNotify.ALL_DCS);
     }
 
     public UserProvider getDelegate() {
@@ -214,7 +214,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         if (cached != null && !cached.getRealm().equals(realm.getId())) {
             cached = null;
         }
-        
+
         UserModel adapter = null;
         if (cached == null) {
             logger.trace("not cached");
@@ -340,12 +340,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
         int notBefore = getDelegate().getNotBeforeOfUser(realm, delegate);
 
         if (Profile.isFeatureEnabled(Profile.Feature.ORGANIZATION)) {
-            // check if provider is enabled and user is managed member of a disabled organization OR provider is disabled and user is managed member
-            OrganizationProvider organizationProvider = session.getProvider(OrganizationProvider.class);
-            OrganizationModel organization = organizationProvider.getByMember(delegate);
-
-            if ((organizationProvider.isEnabled() && organization != null && organization.isManaged(delegate) && !organization.isEnabled()) || 
-                    (!organizationProvider.isEnabled() && organization != null && organization.isManaged(delegate))) {
+            if (isOrganizationDisabled(session, delegate)) {
                 return new ReadOnlyUserModelDelegate(delegate) {
                     @Override
                     public boolean isEnabled() {
@@ -355,13 +350,11 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             }
         }
 
-        StorageId storageId = delegate.getFederationLink() != null ?
-                new StorageId(delegate.getFederationLink(), delegate.getId()) : new StorageId(delegate.getId());
-        CachedUser cached = null;
-        UserAdapter adapter = null;
+        CachedUser cached;
+        UserAdapter adapter;
 
-        if (!storageId.isLocal()) {
-            ComponentModel component = realm.getComponent(storageId.getProviderId());
+        if (delegate.getFederationLink() != null) {
+            ComponentModel component = realm.getComponent(delegate.getFederationLink());
             UserStorageProviderModel model = new UserStorageProviderModel(component);
             if (!model.isEnabled()) {
                 return new ReadOnlyUserModelDelegate(delegate) {
@@ -509,7 +502,7 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
     @Override
     public Stream<UserModel> getRoleMembersStream(RealmModel realm, RoleModel role) {
         return getDelegate().getRoleMembersStream(realm, role);
-    }    
+    }
 
     @Override
     public UserModel getServiceAccount(ClientModel client) {
@@ -980,5 +973,14 @@ public class UserCacheSession implements UserCache, OnCreateComponent, OnUpdateC
             return ((UserProfileDecorator) getDelegate()).decorateUserProfile(providerId, metadata);
         }
         return List.of();
+    }
+
+    private boolean isOrganizationDisabled(KeycloakSession session, UserModel delegate) {
+        // check if provider is enabled and user is managed member of a disabled organization OR provider is disabled and user is managed member
+        OrganizationProvider organizationProvider = session.getProvider(OrganizationProvider.class);
+
+        return organizationProvider.getByMember(delegate)
+                .anyMatch((org) -> (organizationProvider.isEnabled() && org.isManaged(delegate) && !org.isEnabled()) ||
+                        (!organizationProvider.isEnabled() && org.isManaged(delegate)));
     }
 }

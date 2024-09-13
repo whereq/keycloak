@@ -93,12 +93,13 @@ public class UncaughtErrorPageTest extends AbstractKeycloakTest {
             post.setEntity(new StringEntity("{ invalid : invalid }"));
             post.setHeader("Content-Type", "application/json");
 
-            CloseableHttpResponse response = client.execute(post);
-            assertEquals(400, response.getStatusLine().getStatusCode());
+            try (CloseableHttpResponse response = client.execute(post)) {
+                assertEquals(400, response.getStatusLine().getStatusCode());
 
-            OAuth2ErrorRepresentation error = JsonSerialization.readValue(response.getEntity().getContent(), OAuth2ErrorRepresentation.class);
-            assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
-            assertNotNull(error.getErrorDescription());
+                OAuth2ErrorRepresentation error = JsonSerialization.readValue(response.getEntity().getContent(), OAuth2ErrorRepresentation.class);
+                assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
+                assertNotNull("found error with " + error.getError() + "/" + error.getErrorDescription(), error.getErrorDescription());
+            }
         }
     }
 
@@ -113,12 +114,13 @@ public class UncaughtErrorPageTest extends AbstractKeycloakTest {
             post.setHeader("Authorization", "bearer " + accessToken);
             post.setHeader("Content-Type", "application/json");
 
-            CloseableHttpResponse response = client.execute(post);
-            assertEquals(400, response.getStatusLine().getStatusCode());
+            try (CloseableHttpResponse response = client.execute(post)) {
+                assertEquals(400, response.getStatusLine().getStatusCode());
 
-            OAuth2ErrorRepresentation error = JsonSerialization.readValue(response.getEntity().getContent(), OAuth2ErrorRepresentation.class);
-            assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
-            assertNotNull(error.getErrorDescription());
+                OAuth2ErrorRepresentation error = JsonSerialization.readValue(response.getEntity().getContent(), OAuth2ErrorRepresentation.class);
+                assertEquals(OAuthErrorException.INVALID_REQUEST, error.getError());
+                assertNotNull("found error with " + error.getError() + "/" + error.getErrorDescription(), error.getErrorDescription());
+            }
         }
     }
 
@@ -223,7 +225,7 @@ public class UncaughtErrorPageTest extends AbstractKeycloakTest {
 
         try {
             checkPageNotFound("/auth/realms/master/nosuch");
-            String url = driver.findElement(By.xpath("//a[text()[contains(.,'Deutsch')]]")).getAttribute("href");
+             String url = driver.findElement(By.xpath("//option[text()[contains(.,'Deutsch')]]")).getAttribute("value");
             driver.navigate().to(url);
             errorPage.assertCurrent();
         } finally {

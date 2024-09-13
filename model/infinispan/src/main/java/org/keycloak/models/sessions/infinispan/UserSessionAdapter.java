@@ -17,7 +17,7 @@
 
 package org.keycloak.models.sessions.infinispan;
 
-import org.keycloak.common.Profile;
+import org.keycloak.common.util.MultiSiteUtils;
 import org.keycloak.models.AuthenticatedClientSessionModel;
 import org.keycloak.models.ClientModel;
 import org.keycloak.models.KeycloakSession;
@@ -231,7 +231,7 @@ public class UserSessionAdapter<T extends SessionRefreshStore & UserSessionProvi
             return;
         }
 
-        if (!Profile.isFeatureEnabled(Profile.Feature.PERSISTENT_USER_SESSIONS) && offline) {
+        if (!MultiSiteUtils.isPersistentSessionsEnabled() && offline) {
             // Received the message from the other DC that we should update the lastSessionRefresh in local cluster. Don't update DB in that case.
             // The other DC already did.
             Boolean ignoreRemoteCacheUpdate = (Boolean) session.getAttribute(CrossDCLastSessionRefreshListener.IGNORE_REMOTE_CACHE_UPDATE);
@@ -371,7 +371,7 @@ public class UserSessionAdapter<T extends SessionRefreshStore & UserSessionProvi
 
             @Override
             public void runUpdate(UserSessionEntity entity) {
-                InfinispanUserSessionProvider.updateSessionEntity(entity, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
+                UserSessionEntity.updateSessionEntity(entity, realm, user, loginUsername, ipAddress, authMethod, rememberMe, brokerSessionId, brokerUserId);
 
                 entity.setState(null);
                 entity.getNotes().clear();

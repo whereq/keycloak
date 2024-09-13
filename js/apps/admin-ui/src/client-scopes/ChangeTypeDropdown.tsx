@@ -8,7 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAdminClient } from "../admin-client";
 import type { Row } from "../clients/scopes/ClientScopes";
-import { useAlerts } from "../components/alert/Alerts";
+import { useAlerts } from "@keycloak/keycloak-ui-shared";
 import {
   ClientScope,
   allClientScopeTypes,
@@ -38,6 +38,7 @@ export const ChangeTypeDropdown = ({
   return (
     <Select
       aria-label="change-type-to"
+      onOpenChange={(isOpen) => setOpen(isOpen)}
       isOpen={open}
       toggle={(ref) => (
         <MenuToggle

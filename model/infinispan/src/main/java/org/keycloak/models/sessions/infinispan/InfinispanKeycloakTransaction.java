@@ -1,13 +1,13 @@
 /*
  * Copyright 2017 Red Hat, Inc. and/or its affiliates
  * and other contributors as indicated by the @author tags.
- * 
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -126,6 +126,9 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
             if (current instanceof CacheTaskWithValue) {
                 ((CacheTaskWithValue<V>) current).setValue(value);
                 ((CacheTaskWithValue<V>) current).updateLifespan(lifespan, lifespanUnit);
+            } else if (current != TOMBSTONE && current.getOperation() != Operation.REMOVE) {
+                // A previous delete operation will take precedence over any new replace
+                throw new IllegalStateException("Can't replace entry: task " + current + " in progress for session");
             }
         } else {
             tasks.put(taskKey, new CacheTaskWithValue<V>(value, lifespan, lifespanUnit) {
@@ -150,7 +153,7 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
 
         CacheTask current = tasks.get(taskKey);
         if (current != null) {
-            if (current instanceof CacheTaskWithValue && ((CacheTaskWithValue<?>) current).getOperation() == Operation.PUT) {
+            if (current instanceof CacheTaskWithValue && current.getOperation() == Operation.PUT) {
                 tasks.put(taskKey, TOMBSTONE);
                 return;
             }
@@ -171,6 +174,10 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
                 return String.format("CacheTask: Operation 'remove' for key %s", key);
             }
 
+            @Override
+            public Operation getOperation() {
+                return Operation.REMOVE;
+            }
         });
     }
 
@@ -200,9 +207,13 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
 
     public interface CacheTask {
         void execute();
+
+        default Operation getOperation() {
+            return Operation.OTHER;
+        }
     }
 
-    public enum Operation { PUT, OTHER }
+    public enum Operation { PUT, REMOVE, OTHER }
 
     public static abstract class CacheTaskWithValue<V> implements CacheTask {
         protected V value;
@@ -226,10 +237,6 @@ public class InfinispanKeycloakTransaction implements KeycloakTransaction {
         public void updateLifespan(long lifespan, TimeUnit lifespanUnit) {
             this.lifespan = lifespan;
             this.lifespanUnit = lifespanUnit;
-        }
-
-        public Operation getOperation() {
-            return Operation.OTHER;
         }
     }
 

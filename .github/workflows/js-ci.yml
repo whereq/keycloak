@@ -43,17 +43,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-          check-latest: true
-          cache: maven
-
       - name: Build Keycloak
+        uses: ./.github/actions/build-keycloak
+
+      - name: Prepare archive for upload
         run: |
-          ./mvnw clean install --errors -DskipTests -DskipTestsuite -DskipExamples -Pdistribution
           mv ./quarkus/dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz ./keycloak-999.0.0-SNAPSHOT.tar.gz
 
       - name: Upload Keycloak dist
@@ -130,7 +124,7 @@ jobs:
     if: needs.conditional.outputs.js-ci == 'true'
     runs-on: ubuntu-latest
     env:
-      WORKSPACE: admin-ui
+      WORKSPACE: keycloak-admin-ui
     steps:
       - uses: actions/checkout@v4
 
@@ -164,26 +158,21 @@ jobs:
           name: keycloak
 
       - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
+        uses: ./.github/actions/java-setup
 
       - name: Start Keycloak server
         run: |
           tar xfvz keycloak-999.0.0-SNAPSHOT.tar.gz
           keycloak-999.0.0-SNAPSHOT/bin/kc.sh start-dev --features=transient-users,oid4vc-vci &> ~/server.log &
         env:
-          KEYCLOAK_ADMIN: admin
-          KEYCLOAK_ADMIN_PASSWORD: admin
+          KC_BOOTSTRAP_ADMIN_USERNAME: admin
+          KC_BOOTSTRAP_ADMIN_PASSWORD: admin
 
       - name: Install Playwright browsers
         run: pnpm --fail-if-no-match --filter ${{ env.WORKSPACE }} exec playwright install --with-deps
 
       - name: Run Playwright tests
         run: pnpm --fail-if-no-match --filter ${{ env.WORKSPACE }} test
-        env:
-          KEYCLOAK_SERVER: http://localhost:8080
 
       - name: Upload Playwright report
         uses: actions/upload-artifact@v4
@@ -225,7 +214,7 @@ jobs:
     if: needs.conditional.outputs.js-ci == 'true'
     runs-on: ubuntu-latest
     env:
-      WORKSPACE: admin-ui
+      WORKSPACE: keycloak-admin-ui
     strategy:
       matrix:
         container: [1, 2, 3, 4, 5]
@@ -260,18 +249,17 @@ jobs:
           name: keycloak
 
       - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
+        uses: ./.github/actions/java-setup
 
       - name: Start Keycloak server
         run: |
           tar xfvz keycloak-999.0.0-SNAPSHOT.tar.gz
           keycloak-999.0.0-SNAPSHOT/bin/kc.sh start-dev --features=admin-fine-grained-authz,transient-users &> ~/server.log &
         env:
-          KEYCLOAK_ADMIN: admin
-          KEYCLOAK_ADMIN_PASSWORD: admin
+          KC_BOOTSTRAP_ADMIN_USERNAME: admin
+          KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+          KC_BOOTSTRAP_ADMIN_CLIENT_ID: temporary-admin-service
+          KC_BOOTSTRAP_ADMIN_CLIENT_SECRET: temporary-admin-service
 
       - name: Start LDAP server
         run: pnpm --fail-if-no-match --filter ${{ env.WORKSPACE }} cy:ldap-server &
@@ -284,8 +272,6 @@ jobs:
           wait-on: http://localhost:8080
           working-directory: js/apps/admin-ui
         env:
-          CYPRESS_BASE_URL: http://localhost:8080/admin/
-          CYPRESS_KEYCLOAK_SERVER: http://localhost:8080
           SPLIT: ${{ strategy.job-total }}
           SPLIT_INDEX: ${{ strategy.job-index }}
           SPLIT_RANDOM_SEED: ${{ needs.generate-test-seed.outputs.seed }}

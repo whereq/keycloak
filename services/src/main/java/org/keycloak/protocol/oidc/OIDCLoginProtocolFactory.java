@@ -109,21 +109,9 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
     public static final String ROLES_SCOPE_CONSENT_TEXT = "${rolesScopeConsentText}";
     public static final String ORGANIZATION_SCOPE_CONSENT_TEXT = "${organizationScopeConsentText}";
 
-    public static final String CONFIG_LEGACY_LOGOUT_REDIRECT_URI = "legacy-logout-redirect-uri";
-    public static final String SUPPRESS_LOGOUT_CONFIRMATION_SCREEN = "suppress-logout-confirmation-screen";
-
-    private OIDCProviderConfig providerConfig;
-
     @Override
     public void init(Config.Scope config) {
         initBuiltIns();
-        this.providerConfig = new OIDCProviderConfig(config);
-        if (providerConfig.isLegacyLogoutRedirectUri()) {
-            logger.warnf("Deprecated switch '%s' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.", CONFIG_LEGACY_LOGOUT_REDIRECT_URI);
-        }
-        if (providerConfig.suppressLogoutConfirmationScreen()) {
-            logger.warnf("Deprecated switch '%s' is enabled. Please try to disable it and update your clients to use OpenID Connect compliant way for RP-initiated logout.", SUPPRESS_LOGOUT_CONFIRMATION_SCREEN);
-        }
     }
 
     @Override
@@ -393,7 +381,7 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
     }
 
 
-    public void addAcrClientScope(RealmModel newRealm) {
+    public ClientScopeModel addAcrClientScope(RealmModel newRealm) {
         if (Profile.isFeatureEnabled(Profile.Feature.STEP_UP_AUTHENTICATION)) {
             ClientScopeModel acrScope = KeycloakModelUtils.getClientScopeByName(newRealm, ACR_SCOPE);
             if (acrScope == null) {
@@ -411,8 +399,10 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
             } else {
                 logger.debugf("Client scope '%s' already exists in realm '%s'. Skip creating it.", ACR_SCOPE, newRealm.getName());
             }
+            return acrScope;
         } else {
             logger.debugf("Skip creating client scope '%s' in the realm '%s' due the step-up authentication feature is disabled.", ACR_SCOPE, newRealm.getName());
+            return null;
         }
     }
 
@@ -442,7 +432,7 @@ public class OIDCLoginProtocolFactory extends AbstractLoginProtocolFactory {
 
     @Override
     public Object createProtocolEndpoint(KeycloakSession session, EventBuilder event) {
-        return new OIDCLoginProtocolService(session, event, providerConfig);
+        return new OIDCLoginProtocolService(session, event);
     }
 
     @Override

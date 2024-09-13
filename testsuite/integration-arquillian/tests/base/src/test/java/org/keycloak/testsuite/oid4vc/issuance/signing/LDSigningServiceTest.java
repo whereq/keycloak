@@ -17,13 +17,13 @@
 
 package org.keycloak.testsuite.oid4vc.issuance.signing;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Before;
 import org.junit.Test;
 import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.crypto.KeyWrapper;
 import org.keycloak.models.KeycloakSession;
+import org.keycloak.protocol.oid4vc.issuance.VCIssuanceContext;
 import org.keycloak.protocol.oid4vc.issuance.signing.LDSigningService;
 import org.keycloak.protocol.oid4vc.issuance.signing.SigningServiceException;
 import org.keycloak.protocol.oid4vc.model.CredentialSubject;
@@ -33,7 +33,6 @@ import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.testsuite.runonserver.RunOnServerException;
 
 import java.time.Instant;
-import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -61,7 +60,6 @@ public class LDSigningServiceTest extends OID4VCTest {
                                     getKeyFromSession(session).getKid(),
                                     "EdDSA",
                                     "UnsupportedSignatureType",
-                                    new ObjectMapper(),
                                     new StaticTimeProvider(1000),
                                     Optional.empty()));
         } catch (RunOnServerException ros) {
@@ -81,7 +79,6 @@ public class LDSigningServiceTest extends OID4VCTest {
                                     "no-such-key",
                                     "EdDSA",
                                     "Ed25519Signature2018",
-                                    new ObjectMapper(),
                                     new StaticTimeProvider(1000),
                                     Optional.empty()));
         } catch (RunOnServerException ros) {
@@ -113,7 +110,7 @@ public class LDSigningServiceTest extends OID4VCTest {
                                 Map.of("id", String.format("uri:uuid:%s", UUID.randomUUID()),
                                         "test", "test",
                                         "arrayClaim", List.of("a", "b", "c"),
-                                        "issuanceDate", Date.from(Instant.ofEpochSecond(10))),
+                                        "issuanceDate", Instant.ofEpochSecond(10)),
                                 Optional.empty()));
     }
 
@@ -127,7 +124,7 @@ public class LDSigningServiceTest extends OID4VCTest {
                                 Map.of("id", String.format("uri:uuid:%s", UUID.randomUUID()),
                                         "test", "test",
                                         "arrayClaim", List.of("a", "b", "c"),
-                                        "issuanceDate", Date.from(Instant.ofEpochSecond(10))),
+                                        "issuanceDate", Instant.ofEpochSecond(10)),
                                 Optional.of("did:web:test.org#the-key-id")));
     }
 
@@ -150,13 +147,12 @@ public class LDSigningServiceTest extends OID4VCTest {
                 keyWrapper.getKid(),
                 "EdDSA",
                 "Ed25519Signature2018",
-                new ObjectMapper(),
                 new StaticTimeProvider(1000),
                 kid);
 
         VerifiableCredential testCredential = getTestCredential(claims);
 
-        VerifiableCredential verifiableCredential = ldSigningService.signCredential(testCredential);
+        VerifiableCredential verifiableCredential = ldSigningService.signCredential(new VCIssuanceContext().setVerifiableCredential(testCredential));
 
         assertEquals("The types should be included", TEST_TYPES, verifiableCredential.getType());
         assertEquals("The issuer should be included", TEST_DID, verifiableCredential.getIssuer());
