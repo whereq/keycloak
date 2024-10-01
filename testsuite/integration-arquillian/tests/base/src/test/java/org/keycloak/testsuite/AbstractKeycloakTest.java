@@ -55,6 +55,7 @@ import org.keycloak.testsuite.auth.page.login.OIDCLogin;
 import org.keycloak.testsuite.auth.page.login.UpdatePassword;
 import org.keycloak.testsuite.client.KeycloakTestingClient;
 import org.keycloak.testsuite.pages.LoginPasswordUpdatePage;
+import org.keycloak.testsuite.util.BrowserTabUtil;
 import org.keycloak.testsuite.util.CryptoInitRule;
 import org.keycloak.testsuite.util.DroneUtils;
 import org.keycloak.testsuite.util.OAuthClient;
@@ -258,6 +259,7 @@ public abstract class AbstractKeycloakTest {
 
         // Remove all browsers from queue
         DroneUtils.resetQueue();
+        BrowserTabUtil.cleanup();
     }
 
     protected TestCleanup getCleanup(String realmName) {
@@ -700,12 +702,9 @@ public abstract class AbstractKeycloakTest {
         Time.setOffset(offset);
         Map result = testingClient.testing().setTimeOffset(Collections.singletonMap("offset", String.valueOf(offset)));
 
-        // force refreshing token after time offset has changed
-        try {
-            adminClient.tokenManager().refreshToken();
-        } catch (RuntimeException e) {
-            adminClient.tokenManager().grantToken();
-        }
+        // force getting new token after time offset has changed
+        adminClient.tokenManager().grantToken();
+
 
         return String.valueOf(result);
     }
